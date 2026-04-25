@@ -1,0 +1,137 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<LangVersion>latest</LangVersion>
+		<!-- Source generator configuration -->
+		<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+		<IsRoslynComponent>true</IsRoslynComponent>
+		<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
+		<IsTrimmable Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsTrimmable>
+
+		<!--
+			This project produces the Subro.RecordForge NuGet. The sibling runtime project
+			(..\RecordForge\Subro.RecordForge.csproj) is referenced via ProjectReference so
+			the generator can use the real attribute / constant definitions as its single
+			source of truth (no stubs, no copied enum values). At pack time we embed the
+			runtime DLL under lib/netstandard2.0/ and this generator DLL under
+			analyzers/dotnet/cs/ (see _PackRecordForgeNupkg below).
+		-->
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<!-- Don't pack this DLL into lib/; it's an analyzer and we add it manually. -->
+		<IncludeBuildOutput>false</IncludeBuildOutput>
+		<!--
+			The analyzer-side package references (Microsoft.CodeAnalysis.*, Microsoft.Bcl.HashCode)
+			need to stay transitively visible at *compile* time so the in-solution test project can
+			compile against the generator's internals. They must NOT appear as NuGet dependencies
+			of Subro.RecordForge itself (the generator ships as a raw analyzer DLL, not a lib),
+			so we suppress pack-time dependencies wholesale. That leaves the nuspec without a
+			netstandard2.0 dep group, which produces a benign NU5128 warning (silenced below).
+		-->
+		<SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+		<NoWarn>$(NoWarn);NU5128</NoWarn>
+
+		<PackageId>Subro.RecordForge</PackageId>
+		<!--
+			Versioning is owned by MinVer: the package version is derived from git tags at
+			build time. Tagging a commit 'vX.Y.Z' produces the stable 'X.Y.Z'; commits past
+			the latest tag produce '<next-patch>-alpha.0.<height>' pre-releases. If no tag
+			exists yet, MinVerMinimumMajorMinor keeps us at 0.1.*. The MinVer package is
+			referenced privately so it does not leak into consumers.
+		-->
+		<MinVerTagPrefix>v</MinVerTagPrefix>
+		<MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
+		<MinVerDefaultPreReleaseIdentifiers>alpha.0</MinVerDefaultPreReleaseIdentifiers>
+		<Authors>Robert Verpalen</Authors>
+		<Description>Generate record/record struct/struct/class implementations from interfaces via a simple attribute. Ships runtime attributes plus a Roslyn incremental source generator.</Description>
+		<PackageTags>roslyn;source-generator;incremental-generator;record;record-struct;code-generation;interface</PackageTags>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryUrl>https://github.com/robverp78/RecordForge</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+
+		<!-- Hook to add the runtime DLL (lib/) and this generator DLL (analyzers/) into the package. -->
+		<TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_PackRecordForgeNupkg</TargetsForTfmSpecificContentInPackage>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Include the repository README in the package root. -->
+		<None Include="..\README.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+			Analyzer dependencies. These stay transitively visible to the in-solution test
+			project (which ProjectReferences this generator) so it can compile against the
+			generator's internals. They are *not* packed as NuGet dependencies because
+			SuppressDependenciesWhenPacking=true is set; the generator ships as a raw analyzer
+			DLL under analyzers/dotnet/cs/, so consumers never pull these transitively.
+		-->
+		<PackageReference Include="Microsoft.Bcl.HashCode" Version="6.0.0" />
+		<PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.3.0" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.3.0" />
+		<!-- MinVer: derives Version/PackageVersion from git tags at build time. Build-only, never shipped. -->
+		<PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+		<PackageReference Include="Subro.Generators.TransformResult" Version="1.4.1">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+			Single source of truth: the generator compiles against the real runtime types.
+			PrivateAssets="all" keeps the runtime project from surfacing as a NuGet
+			dependency (it is packed inline under lib/netstandard2.0/ by _PackRecordForgeNupkg).
+		-->
+		<ProjectReference Include="..\RecordForge\Subro.RecordForge.csproj" PrivateAssets="all" />
+	</ItemGroup>
+
+	<!--
+		Shared project (Subro.Generators.Core) consumption.
+
+		The Core code is maintained in its own repo and brought into RecordForge as a git
+		submodule at external/Subro.Generators.Core (the "snapshot").  For fast local
+		iteration we also support editing against the developer's live working copy at
+		..\..\Subro.Generators\Subro.Generators.Core (the "home" folder), if present.
+
+		Selection rules:
+		  - Debug + home folder exists              -> import from home (edit-and-F5 on shared code).
+		  - Any other case (Release, CI, fresh clone) -> import from the pinned submodule snapshot.
+
+		This keeps Release / GitHub Actions builds fully reproducible (they always use the
+		commit recorded in .gitmodules / the parent repo), while still letting local Debug
+		builds pick up in-flight changes to the shared project with zero extra steps.
+	-->
+	<PropertyGroup>
+		<SharedCoreLocal>$(MSBuildThisFileDirectory)..\..\Subro.Generators\Subro.Generators.Core\Subro.Generators.Core.projitems</SharedCoreLocal>
+		<SharedCoreSubmodule>$(MSBuildThisFileDirectory)..\external\Subro.Generators.Core\Subro.Generators.Core.projitems</SharedCoreSubmodule>
+		<UseLocalSharedCore Condition="'$(Configuration)' == 'Debug' AND Exists('$(SharedCoreLocal)')">true</UseLocalSharedCore>
+	</PropertyGroup>
+
+	<Import Project="$(SharedCoreLocal)"     Condition="'$(UseLocalSharedCore)' == 'true'" Label="Core (local)" />
+	<Import Project="$(SharedCoreSubmodule)" Condition="'$(UseLocalSharedCore)' != 'true'" Label="Core (submodule)" />
+
+	<!--
+		Pack target: emit the runtime DLL into lib/netstandard2.0/ and this generator
+		DLL into analyzers/dotnet/cs/. We explicitly Build the runtime project first to
+		guarantee its output exists (pack-time targets can otherwise run before the
+		ProjectReference build output is materialized in $(Configuration)), then resolve
+		the real DLL path via GetTargetPath instead of hard-coding it.
+	-->
+	<Target Name="_PackRecordForgeNupkg" DependsOnTargets="BuiltProjectOutputGroup">
+		<MSBuild Projects="..\RecordForge\Subro.RecordForge.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
+		<MSBuild Projects="..\RecordForge\Subro.RecordForge.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
+			<Output TaskParameter="TargetOutputs" ItemName="_RuntimeTargetOutput" />
+		</MSBuild>
+		<ItemGroup>
+			<!-- Runtime library: consumers reference this directly. -->
+			<TfmSpecificPackageFile Include="@(_RuntimeTargetOutput)" PackagePath="lib/$(TargetFramework)/%(Filename)%(Extension)" />
+			<!-- Generator: loaded by Roslyn during consumer builds. -->
+			<TfmSpecificPackageFile Include="$(TargetPath)" PackagePath="analyzers/dotnet/cs/$(AssemblyName).dll" />
+		</ItemGroup>
+	</Target>
+
+</Project>

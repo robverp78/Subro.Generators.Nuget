@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Subro.Generators.Core/Subro.Generators.Core.shproj" />
+  <Project Path="Subro.Generators.TestBase/Subro.Generators.TestBase.csproj" />
+</Solution>

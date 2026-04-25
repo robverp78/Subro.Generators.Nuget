@@ -1,0 +1,317 @@
+/* ── Design tokens ─────────────────────────────────────────────────────── */
+.gr-shell {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #21262d;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --accent-dim: #1f3a5f;
+    --muted: #8b949e;
+    --text: #e6edf3;
+    --text-dim: #c9d1d9;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --transition: .15s ease;
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+    box-sizing: border-box;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+.gr-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.gr-header-icon {
+    font-size: 1.6rem;
+    color: var(--accent);
+}
+
+.gr-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    margin: 0;
+}
+
+.gr-subtitle {
+    margin-left: auto;
+    font-size: .75rem;
+    color: var(--muted);
+    font-family: var(--mono);
+    letter-spacing: .05em;
+}
+
+/* ── Workspace (two-column) ─────────────────────────────────── */
+.gr-workspace {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.25rem;
+    /* stretch is the default; being explicit so the source panel matches
+       the settings panel's height in the row. */
+    align-items: stretch;
+}
+
+@media (max-width: 860px) {
+    .gr-workspace {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Panel shell (shared base — pierces into child components) ─────────── */
+::deep .gr-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+}
+
+/* ── Panel label (shared — pierces into child components) ──────────────── */
+::deep .gr-panel-label {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: .6rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+/* ── Source group (right column: namespace + usings + interface [+ extra]) ─ */
+.gr-source-group {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    min-height: 0;
+}
+
+.gr-source-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    padding: 0 .25rem;
+}
+
+.gr-source-heading {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .14em;
+    color: var(--muted);
+    text-transform: uppercase;
+}
+
+/* ── Source tabs (inline with the SOURCE header) ──────────────────── */
+.gr-source-tabs {
+    display: inline-flex;
+    gap: .25rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .2rem;
+}
+
+.gr-source-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: .3rem .75rem;
+    border-radius: calc(var(--radius) - 2px);
+    font-size: .72rem;
+    letter-spacing: .03em;
+    font-family: var(--sans);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+}
+
+    .gr-source-tab:hover {
+        color: var(--text-dim);
+    }
+
+.gr-source-tab--active {
+    background: var(--bg);
+    color: var(--accent);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.gr-source-tab-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+/* ── Namespace panel (single-line input) ──────────────────────── */
+.gr-source-namespace {
+    flex: 0 0 auto;
+}
+
+.gr-source-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .5rem .7rem;
+    font-size: .82rem;
+    font-family: var(--mono);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+    .gr-source-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(88,166,255,.12);
+    }
+
+    .gr-source-input::placeholder {
+        color: #484f58;
+    }
+
+/* ── Description text under a panel label (inline usage in Home) ─────── */
+.gr-panel-description {
+    font-size: .72rem;
+    color: var(--muted);
+    margin: -.35rem 0 .65rem 0;
+    line-height: 1.4;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    font-family: var(--sans);
+}
+
+/* ── Source body (two columns: left = namespace+usings, right = active tab) ─ */
+.gr-source-body {
+    display: grid;
+    grid-template-columns: minmax(200px, 1fr) 2fr;
+    gap: .75rem;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.gr-source-left {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    min-height: 0;
+}
+
+.gr-source-right {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Namespace panel stays at its natural height, usings fills the rest of the left column */
+::deep .gr-source-usings {
+    flex: 1 1 auto;
+    min-height: 140px;
+}
+
+/* The active tab content fills the right column entirely */
+::deep .gr-source-interface,
+::deep .gr-source-extra {
+    flex: 1 1 auto;
+    min-height: 200px;
+}
+
+@media (max-width: 860px) {
+    .gr-source-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ── Action bar ────────────────────────────────────────────────────────── */
+.gr-action-bar {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
+.gr-generate-btn {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    background: var(--accent);
+    color: #0d1117;
+    border: none;
+    border-radius: var(--radius);
+    padding: .6rem 1.5rem;
+    font-size: .88rem;
+    font-weight: 700;
+    font-family: var(--sans);
+    cursor: pointer;
+    letter-spacing: .02em;
+    transition: opacity var(--transition), box-shadow var(--transition);
+}
+
+    .gr-generate-btn:hover:not(:disabled) {
+        box-shadow: 0 0 0 3px rgba(88,166,255,.25);
+    }
+
+    .gr-generate-btn:disabled {
+        opacity: .35;
+        cursor: not-allowed;
+    }
+
+.gr-btn-icon {
+    font-size: .75rem;
+}
+
+/* ── Diagnostics panel ─────────────────────────────────────────────────── */
+.gr-diagnostics-panel {
+    margin-top: 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+}
+
+.gr-diagnostics-label {
+    font-size: .65rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: .6rem;
+}
+
+.gr-diagnostic-item {
+    font-family: var(--mono);
+    font-size: .8rem;
+    padding: .3rem .5rem;
+    border-radius: var(--radius);
+    margin-bottom: .3rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.gr-diagnostic--error {
+    background: rgba(248, 81, 73, .12);
+    color: #f85149;
+    border-left: 3px solid #f85149;
+}
+
+.gr-diagnostic--warning {
+    background: rgba(210, 153, 34, .12);
+    color: #d29922;
+    border-left: 3px solid #d29922;
+}

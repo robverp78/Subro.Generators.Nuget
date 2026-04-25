@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+	<InterceptorsNamespaces>$(InterceptorsNamespaces);Viaduct.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+	  <ProjectReference Include="..\..\Viaduct.Generator\Viaduct.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Viaduct\Viaduct.Server.csproj" />
+    <ProjectReference Include="..\SharedInterfaces\SharedInterfaces.csproj" />
+  </ItemGroup>
+
+</Project>

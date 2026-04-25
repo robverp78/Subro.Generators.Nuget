@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>8cb7b1a3-c190-4ea9-bac4-d62d7f86c310</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Subro.Generator.Shared</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Files local to this shared project -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)EquatableArray.cs">
+    </Compile>
+    <Compile Include="$(MSBuildThisFileDirectory)FrameworkVersionsHelpers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)JsonContextGenerator.shared.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MetaData.cs" />
+  </ItemGroup>
+</Project>

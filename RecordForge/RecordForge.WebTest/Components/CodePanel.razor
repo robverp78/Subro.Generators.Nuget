@@ -1,0 +1,129 @@
+@inject IJSRuntime JS
+
+
+
+@if (!Hidden)
+{
+    <section class="gr-panel @ModifierClass" style="@PanelStyle">
+        <div class="gr-panel-label">
+            @Label
+            @if (ShowCopyButton)
+            {
+                <button class="gr-copy-btn" @onclick="CopyToClipboard" title="Copy to clipboard">
+                    @(CopiedRecently ? "✓ Copied" : "⎘ Copy")
+                </button>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <div class="gr-panel-description">@Description</div>
+        }
+
+        @if (ReadOnly)
+        {
+            <pre class="gr-code-output"><code>@Code</code></pre>
+        }
+        else
+        {
+            <textarea class="gr-code-editor"
+                      @bind:get="Code"
+                      @bind:set="CodeChanged.InvokeAsync"
+                      @bind:event="oninput"
+                      placeholder="@Placeholder"
+                      spellcheck="false"></textarea>
+        }
+    </section>
+}
+
+@code {
+    // ── Parameters ────────────────────────────────────────────────────────────
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Code { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> CodeChanged { get; set; }
+
+    /// <summary>When true, renders a read-only code block; otherwise an editable textarea.</summary>
+    [Parameter]
+    public bool ReadOnly { get; set; }
+
+    /// <summary>Placeholder text shown in editable mode.</summary>
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// Optional descriptive text rendered in smaller print directly below the
+    /// panel label, used to give the user hints about what to put in the panel.
+    /// </summary>
+    [Parameter]
+    public string? Description { get; set; }
+
+    /// <summary>Shows a "copy to clipboard" button in the panel label.</summary>
+    [Parameter]
+    public bool ShowCopyButton { get; set; }
+
+    /// <summary>If true, the panel is not rendered at all when <see cref="Code"/> is empty.</summary>
+    [Parameter]
+    public bool HideWhenEmpty { get; set; }
+
+    /// <summary>Extra CSS class(es) added to the root <c>.gr-panel</c> element (e.g. <c>gr-panel--output</c>).</summary>
+    [Parameter]
+    public string? ModifierClass { get; set; }
+
+    /// <summary>
+    /// Explicit height for the panel as a CSS value (e.g. <c>"420px"</c>, <c>"60vh"</c>, <c>"100%"</c>).
+    /// The inner editor / output fills the remaining space automatically.
+    /// </summary>
+    [Parameter]
+    public string? Height { get; set; }
+
+    /// <summary>Additional inline style applied to the root <c>.gr-panel</c> element.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    // ── Internal state ────────────────────────────────────────────────────────
+
+    private bool Hidden => HideWhenEmpty && string.IsNullOrEmpty(Code);
+
+    private string? PanelStyle
+    {
+        get
+        {
+            var hasHeight = !string.IsNullOrWhiteSpace(Height);
+            var hasStyle = !string.IsNullOrWhiteSpace(Style);
+            if (!hasHeight && !hasStyle) return null;
+
+            var heightPart = hasHeight ? $"height:{Height};" : string.Empty;
+            var stylePart = hasStyle ? Style!.TrimEnd(';') + ";" : string.Empty;
+            return heightPart + stylePart;
+        }
+    }
+
+    private bool CopiedRecently { get; set; }
+    private string? _trackedCode;
+
+    protected override void OnParametersSet()
+    {
+        // Reset the "copied" indicator whenever the code changes.
+        if (_trackedCode != Code)
+        {
+            _trackedCode = Code;
+            CopiedRecently = false;
+        }
+    }
+
+    private async Task CopyToClipboard()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Code);
+        CopiedRecently = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        CopiedRecently = false;
+        StateHasChanged();
+    }
+}

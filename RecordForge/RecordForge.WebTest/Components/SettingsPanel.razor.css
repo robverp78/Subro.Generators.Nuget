@@ -1,0 +1,197 @@
+/* ── Settings body ─────────────────────────────────────────────────────── */
+.gr-settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: .95rem;
+}
+
+/* ── Field ─────────────────────────────────────────────────────────────── */
+.gr-field {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+
+.gr-field--toggle {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.gr-field-label {
+    font-size: .78rem;
+    color: var(--text-dim);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+/* ── Info tooltip ──────────────────────────────────────────────────────── */
+.gr-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    font-size: .6rem;
+    color: var(--muted);
+    cursor: help;
+    flex-shrink: 0;
+    transition: background var(--transition), color var(--transition);
+}
+
+    .gr-info-icon:hover {
+        background: var(--accent-dim);
+        color: var(--accent);
+    }
+
+/* ── Select & Input ────────────────────────────────────────────────────── */
+.gr-select,
+.gr-input {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .45rem .65rem;
+    font-size: .82rem;
+    font-family: var(--sans);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    width: 100%;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.gr-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b949e'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right .65rem center;
+    padding-right: 2rem;
+}
+
+    .gr-select:focus,
+    .gr-input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(88,166,255,.12);
+    }
+
+.gr-input::placeholder {
+    color: #484f58;
+}
+
+/* ── Toggle ────────────────────────────────────────────────────────────── */
+.gr-toggle {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+    .gr-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+    }
+
+.gr-toggle-track {
+    display: block;
+    width: 36px;
+    height: 20px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+    position: relative;
+}
+
+    .gr-toggle-track::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--muted);
+        transition: transform var(--transition), background var(--transition);
+    }
+
+.gr-toggle input:checked + .gr-toggle-track {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+    .gr-toggle input:checked + .gr-toggle-track::after {
+        transform: translateX(16px);
+        background: var(--accent);
+    }
+
+/* ── Checkbox group ────────────────────────────────────────────────────── */
+.gr-checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .6rem .75rem;
+}
+
+.gr-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    cursor: pointer;
+    font-size: .8rem;
+    color: var(--text-dim);
+    user-select: none;
+    position: relative;
+}
+
+    .gr-checkbox-item input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        position: absolute;
+    }
+
+.gr-checkmark {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    background: var(--surface-2);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.gr-checkbox-item input:checked ~ .gr-checkmark {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+    .gr-checkbox-item input:checked ~ .gr-checkmark::after {
+        content: '';
+        display: block;
+        width: 4px;
+        height: 7px;
+        border: 2px solid #fff;
+        border-top: none;
+        border-left: none;
+        transform: rotate(45deg) translate(-1px,-1px);
+    }
+
+.gr-checkbox-label {
+    font-family: var(--mono);
+    font-size: .78rem;
+    flex: 1;
+}

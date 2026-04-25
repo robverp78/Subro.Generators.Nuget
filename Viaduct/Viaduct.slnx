@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/Example/">
+    <Project Path="Example/ClientConsoleExample/ClientConsoleExample.csproj" Id="003f3a73-e38d-47a0-94d2-31b381d59e8d" />
+    <Project Path="Example/Server/ServerExample.csproj" Id="77346d3b-4625-4e78-9a06-bf2468525f3e" />
+    <Project Path="Example/SharedInterfaces/SharedInterfaces.csproj" Id="aea4cb49-03bd-4ecd-a89a-589eb9be6082" />
+  </Folder>
+  <Folder Name="/Other/">
+    <Project Path="../Subro.Generators.Core/Subro.Generators.Core.shproj" Id="5540db92-dde2-4e6c-8a44-7257b0d10d27" />
+    <Project Path="../Subro.Generators.TestBase/Subro.Generators.TestBase.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Viaduct.GeneratorTests/Viaduct.GeneratorTests.csproj" Id="c6c9d998-d5d4-4d57-b7f1-e7812324cca9" />
+    <Project Path="Viaduct.Tests/Viaduct.Tests.csproj" />
+  </Folder>
+  <Folder Name="/_Viaduct/">
+    <Project Path="../Subro.Json/Subro.Json.Generator/Subro.Json.Generator.csproj" />
+    <Project Path="../Subro.Json/Subro.Json/Subro.Json.csproj" />
+    <Project Path="Viaduct.Client.Shared/Viaduct.Client.Shared.shproj" Id="293dc34d-5e3f-4833-92e9-96041e2b3639" />
+    <Project Path="Viaduct.Client/Viaduct.Client.csproj" Id="5c3ddf76-e513-438c-ab95-522cbea1403c" />
+    <Project Path="Viaduct.Core/Viaduct.Core.csproj" />
+    <Project Path="Viaduct.Generator/Viaduct.Generator.csproj" Id="193f5aa8-1dcb-42aa-8529-7daef14dfe3a" />
+    <Project Path="Viaduct.Shared/Viaduct.Core.Shared.shproj" Id="1588b859-563e-42e0-81b8-ca770a829735" />
+    <Project Path="Viaduct/Viaduct.Server.csproj" />
+  </Folder>
+</Solution>

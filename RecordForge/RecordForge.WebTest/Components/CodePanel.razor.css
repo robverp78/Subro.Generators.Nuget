@@ -1,0 +1,117 @@
+/* ── Panel shell ───────────────────────────────────────────────────────
+   The panel is a flex column so its inner editor / output can fill the
+   panel's size. The size itself is set externally (via the Height /
+   Style parameters, a ModifierClass, or by the parent layout). */
+.gr-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+/* ── Panel output modifier (used when shown below the workspace) ───────── */
+.gr-panel--output {
+    margin-top: 1.5rem;
+    animation: fadeSlideIn .25s ease both;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ── Optional description (smaller helper text under the label) ────────── */
+.gr-panel-description {
+    font-size: .72rem;
+    color: var(--muted);
+    margin: -.35rem 0 .65rem 0;
+    line-height: 1.4;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
+    font-family: var(--sans);
+}
+
+/* ── Code editor (editable mode) ───────────────────────────────────── */
+.gr-code-editor {
+    /* Editor fills the panel according to the panel's padding/margins.
+       Height is driven by the panel; no intrinsic min-height or resizing. */
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    resize: none;
+    background: var(--bg);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.65;
+    padding: 1rem;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color var(--transition);
+    caret-color: var(--accent);
+}
+
+    .gr-code-editor:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(88,166,255,.12);
+    }
+
+    .gr-code-editor::placeholder {
+        color: #484f58;
+    }
+
+/* ── Code output (read-only mode) ──────────────────────────────────────── */
+.gr-code-output {
+    /* Fills the panel the same way the editor does. */
+    flex: 1 1 auto;
+    margin: 0;
+    min-height: 0;
+    padding: 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.65;
+    color: var(--text-dim);
+    overflow: auto;
+    white-space: pre;
+    box-sizing: border-box;
+}
+
+/* ── Copy button ───────────────────────────────────────────────────────── */
+.gr-copy-btn {
+    margin-left: auto;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: .2rem .65rem;
+    font-size: .72rem;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: color var(--transition), border-color var(--transition);
+}
+
+    .gr-copy-btn:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+    }
+
+.gr-code-panel {
+    /* Outer panel controls the overall/main width */
+    width: var(--main-width, 900px);
+    margin: 0 auto;
+    padding: 0 1rem; /* horizontal margins; editor will fill inside these */
+    box-sizing: border-box;
+}

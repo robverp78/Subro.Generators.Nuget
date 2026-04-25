@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+	  <LangVersion>14</LangVersion>
+	  <ImplicitUsings>enable</ImplicitUsings>
+	  <Nullable>enable</Nullable>
+	  <IsAotCompatible>true</IsAotCompatible>
+	  <IsTrimmable>true</IsTrimmable>
+	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+	  <!-- Package metadata for NuGet -->
+	  <PackageId>Viaduct</PackageId>
+	  <Title>Viaduct - The bridge between di httpclient and server minimal api</Title>
+	  <Description>Automatic HTTP endpoint and client proxy generation from service interfaces using source generators. Map your DI services to HTTP endpoints with zero boilerplate.</Description>
+	  <Authors>Robert Verpalen</Authors>
+	  <PackageTags>aspnetcore;webapi;dependency-injection;code-generation;http-client;minimal-api;source-generator</PackageTags>
+	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
+	  <PackageReadmeFile>README.md</PackageReadmeFile>
+	  <Company>Subro Software</Company>	  
+  </PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\Subro.Json\Subro.Json\Subro.Json.csproj" />
+	  <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" />
+	</ItemGroup>
+</Project>

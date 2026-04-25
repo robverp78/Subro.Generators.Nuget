@@ -1,0 +1,284 @@
+@using Subro.RecordForge
+
+<section class="gr-panel gr-panel--settings">
+    <div class="gr-panel-label">SETTINGS</div>
+
+    <div class="gr-settings-body">
+
+        <!-- Kind -->
+        <div class="gr-field">
+            <label class="gr-field-label">
+                Kind
+                <span class="gr-info-icon" title="@Summaries["Kind"]">?</span>
+            </label>
+            <select class="gr-select"
+                    @bind="SelectedKind"
+                    @bind:after="UpdateGeneratedAttribute">
+                @foreach (var value in Enum.GetValues<RecordKind>())
+                {
+                    <option value="@value">@GetText(value)</option>
+                }
+            </select>
+        </div>
+
+        <!-- RecordName -->
+        <div class="gr-field">
+            <label class="gr-field-label">
+                Record Name
+            </label>
+            <input class="gr-input" type="text"
+                   @bind="RecordName"
+                   @bind:after="UpdateGeneratedAttribute"
+                   placeholder="(@Summaries["RecordName"])" />
+        </div>
+
+        <!-- Namespace -->
+        <div class="gr-field">
+            <label class="gr-field-label">
+                Namespace
+            </label>
+            <input class="gr-input" type="text"
+                   @bind="NameSpace"
+                   @bind:after="UpdateGeneratedAttribute"
+                   placeholder="(@Summaries["NameSpace"])" />
+        </div>
+
+        <!-- AsPartial -->
+        <div class="gr-field gr-field--toggle">
+            <label class="gr-field-label">
+                As Partial
+                <span class="gr-info-icon" title="@Summaries["AsPartial"]">?</span>
+            </label>
+            <label class="gr-toggle">
+                <input type="checkbox"
+                       @bind="AsPartial"
+                       @bind:after="UpdateGeneratedAttribute" />
+                <span class="gr-toggle-track"></span>
+            </label>
+        </div>
+
+        <!-- AsAbstract -->
+        <div class="gr-field gr-field--toggle">
+            <label class="gr-field-label">
+                As Abstract
+                <span class="gr-info-icon" title="@Summaries["AsAbstract"]">?</span>
+            </label>
+            <label class="gr-toggle">
+                <input type="checkbox"
+                       @bind="AsAbstract"
+                       @bind:after="UpdateGeneratedAttribute" />
+                <span class="gr-toggle-track"></span>
+            </label>
+        </div>
+
+        <!-- AlwaysCreateSetters -->
+        <div class="gr-field gr-field--toggle">
+            <label class="gr-field-label">
+                Always Create Setters
+                <span class="gr-info-icon" title="@Summaries["AlwaysCreateSetters"]">?</span>
+            </label>
+            <label class="gr-toggle">
+                <input type="checkbox"
+                       @bind="AlwaysCreateSetters"
+                       @bind:after="UpdateGeneratedAttribute" />
+                <span class="gr-toggle-track"></span>
+            </label>
+        </div>
+
+        <!-- ConstructorUsage multiselect -->
+        <div class="gr-field gr-field--multicheck">
+            <label class="gr-field-label">
+                Constructors to add
+                <span class="gr-info-icon" title="@Summaries["ConstructorUsage"]">?</span>
+            </label>
+            <div class="gr-checkbox-group">
+                @foreach (var value in Enum.GetValues<ConstructorUsage>())
+                {
+                    if (value == ConstructorUsage.Automatic) continue;
+                    <label class="gr-checkbox-item">
+                        <input type="checkbox"
+                               checked="@SelectedConstructorUsages.Contains(value)"
+                               @onchange="e => OnConstructorUsageChanged(value, (bool)(e.Value ?? false))" />
+                        <span class="gr-checkmark"></span>
+                        <span class="gr-checkbox-label">@GetText(value)</span>
+                        <span class="gr-info-icon" title="@GetConstructorUsageSummary(value)">?</span>
+                    </label>
+                }
+            </div>
+        </div>
+
+    </div><!-- /.gr-settings-body -->
+</section>
+
+@code {
+
+
+    // ── parameters ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Two-way bindable parameter holding the currently generated
+    /// <c>[GenerateRecord]</c> attribute source text that reflects the
+    /// settings configured in this panel.
+    /// </summary>
+    [Parameter]
+    public string GeneratedAttribute { get; set; } = "[GenerateRecord]";
+
+    [Parameter]
+    public EventCallback<string> GeneratedAttributeChanged { get; set; }
+
+    // ── properties ────────────────────────────────────────────────────────────
+
+
+    private RecordKind SelectedKind { get; set; } = GenerateRecordAttributeBase.DefaultKind;
+
+    private string? RecordName { get; set; }
+
+    private string? NameSpace { get; set; }
+
+    private bool AsPartial { get; set; } = GenerateRecordAttributeBase.DefaultAsPartial;
+
+    private bool AsAbstract { get; set; }
+
+    private bool AlwaysCreateSetters { get; set; }
+
+    private HashSet<ConstructorUsage> SelectedConstructorUsages { get; set; } = new();
+
+    // ── Summaries (mirrors the XML doc on the attribute class) ────────────────
+
+    private static readonly Dictionary<string, string> Summaries = new()
+        {
+            ["Kind"] = "The kind of type to generate.",
+            ["RecordName"] = "Optional. If not given, the interface name (without \"I\") is used.",
+            ["NameSpace"] = "Optional. If not given, the namespace of the interface is used.",
+            ["AsPartial"] = "Indicates if the created record should be indicated as partial (default true).",
+            ["AsAbstract"] = "Indicates if the created record should be created as abstract (default false).",
+            ["AlwaysCreateSetters"] = "The created record will contain setters for all properties, even if the interface only requires a {get;}.\n\n"
+                                    + "If the created record is readonly, the properties become 'init'.\n"
+                                    + "If the property is already an init, it remains an init (it does not become a set).",
+            ["ConstructorUsage"] = "What kind of constructor(s) to create. Either Automatic if all options are deselected (default) or one of the ConstructorUsage values, or a combination.\n\n"
+                                    + "When adding multiple constructors, the primary constructor (if applicable) will be the one with the fewest properties.\n\n"
+                                    + "Automatic (default):"
+                                    + "For readonly records and structs: all properties are put in the ctor "
+                                      + "(inits are fine, setter throws readonly exception).\n"
+                                      + "For classes and classic structs: parameterless constructor; "
+                                      + "other properties are added as get/set properties."
+        };
+
+	// Summaries sourced directly from the XML doc comments on ConstructorUsage
+	private static readonly Dictionary<ConstructorUsage, string> ConstructorUsageSummaries = new()
+    {
+    
+        [ConstructorUsage.Empty] = "Parameterless constructor.",
+        [ConstructorUsage.ReadonlyProperties] = "Only the readonly properties. Set and init properties are added as properties only.",
+        [ConstructorUsage.ReadonlyAndInitProperties] = "Readonly and init properties. Set properties are added as properties only.",
+        [ConstructorUsage.AllProperties] = "All properties go in the constructor."
+    };
+
+    private string GetText(ConstructorUsage ctor) =>
+    ctor switch
+    {
+        ConstructorUsage.Empty =>"Parameterless",
+        ConstructorUsage.ReadonlyProperties => "Only readonly properties",
+        ConstructorUsage.ReadonlyAndInitProperties => "Readonly and init only properties",
+        ConstructorUsage.AllProperties => "All properties",
+        _ => ctor.ToString ()
+    };
+
+    private string GetText(RecordKind kind) =>
+    kind switch
+    {
+RecordKind.ReadonlyStruct => "Readonly struct",
+RecordKind.ReadOnlyRecordStruct => "Readonly record struct",
+RecordKind.RecordStruct => "Record struct",
+_ => kind.ToString()
+    };
+
+    private static string GetConstructorUsageSummary(ConstructorUsage value)
+        => ConstructorUsageSummaries.TryGetValue(value, out var s) ? s : string.Empty;
+
+    // ── Constructor Usage multi-select helper ─────────────────────────────────
+
+    private async Task OnConstructorUsageChanged(ConstructorUsage value, bool isChecked)
+    {
+        // Produce a new set so change detection works predictably.
+        var updated = new HashSet<ConstructorUsage>(SelectedConstructorUsages);
+        if (isChecked)
+            updated.Add(value);
+        else
+            updated.Remove(value);
+
+        SelectedConstructorUsages = updated;
+        await UpdateGeneratedAttribute();
+    }
+
+    // ── Generated attribute rebuild ───────────────────────────────────────────
+
+    protected override void OnInitialized()
+    {
+        // Make sure the initial value reflects the default settings.
+        GeneratedAttribute = BuildGeneratedAttribute();
+    }
+
+    private async Task UpdateGeneratedAttribute()
+    {
+        var rebuilt = BuildGeneratedAttribute();
+        if (rebuilt == GeneratedAttribute)
+            return;
+
+        GeneratedAttribute = rebuilt;
+        if (GeneratedAttributeChanged.HasDelegate)
+            await GeneratedAttributeChanged.InvokeAsync(GeneratedAttribute);
+    }
+
+    private string BuildGeneratedAttribute()
+    {
+        var args = new List<string>();
+
+        // Positional Kind argument (only when it differs from the default).
+        if (SelectedKind != GenerateRecordAttributeBase.DefaultKind)
+        {
+            args.Add($"RecordKind.{SelectedKind}");
+        }
+
+        // Named properties – only emitted when they deviate from the attribute
+        // defaults, so "[GenerateRecord]" stays the shortest possible form.
+        if (!string.IsNullOrWhiteSpace(RecordName))
+        {
+            args.Add($"RecordName = \"{RecordName}\"");
+        }
+
+        if (!string.IsNullOrWhiteSpace(NameSpace))
+        {
+            args.Add($"NameSpace = \"{NameSpace}\"");
+        }
+
+        if (AsPartial != GenerateRecordAttributeBase.DefaultAsPartial)
+        {
+            args.Add($"AsPartial = {(AsPartial ? "true" : "false")}");
+        }
+
+        if (AsAbstract)
+        {
+            args.Add("AsAbstract = true");
+        }
+
+        if (AlwaysCreateSetters)
+        {
+            args.Add("AlwaysCreateSetters = true");
+        }
+
+        // Emit ConstructorUsage combinations in declaration order for stability.
+        var ctorFlags = Enum.GetValues<ConstructorUsage>()
+            .Where(c => c != ConstructorUsage.Automatic && SelectedConstructorUsages.Contains(c))
+            .Select(c => $"ConstructorUsage.{c}")
+            .ToList();
+        if (ctorFlags.Count > 0)
+        {
+            args.Add($"ConstructorUsage = {string.Join(" | ", ctorFlags)}");
+        }
+
+        return args.Count == 0
+            ? "[GenerateRecord]"
+            : $"[GenerateRecord({string.Join(", ", args)})]";
+    }
+}

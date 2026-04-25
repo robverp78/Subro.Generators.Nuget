@@ -1,0 +1,79 @@
+# Builds the Subro.RecordForge generator project in Release configuration and
+# publishes the resulting .nupkg to NuGet.org.
+#
+# Versioning is handled by MinVer (configured in the generator .csproj): the
+# package version is derived from git tags. A commit tagged 'vX.Y.Z' yields the
+# stable 'X.Y.Z'; any other commit on main yields '<next-patch>-alpha.0.<height>'.
+#
+# Authentication uses NuGet.org Trusted Publishing (OIDC) -- no long-lived API
+# key is stored. The trusted-publishing policy on nuget.org must reference this
+# exact workflow filename ('publish-nuget.yml'). The only repo secret required
+# is NUGET_USER (the nuget.org profile name, NOT the email).
+name: Publish NuGet package
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write   # required by NuGet/login@v1 to request an OIDC token
+concurrency:
+  group: publish-nuget
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # MinVer needs full history + tags
+          submodules: recursive   # repo uses external/Subro.Generators.Core
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Restore/build only the generator project (+ its transitive runtime
+      # ProjectReference). The .slnx additionally references test projects and
+      # a sibling '../Subro.Generators/TestBase/...' csproj that lives outside
+      # this repository, so a solution-wide restore would fail in CI. Those
+      # projects aren't needed to produce the NuGet package anyway.
+      - name: Restore
+        run: dotnet restore RecordForge.Generator/Subro.RecordForge.Generator.csproj
+
+      - name: Build & pack (Release)
+        # GeneratePackageOnBuild=true on the generator csproj means the .nupkg
+        # is produced as part of the build. MinVer runs during build and sets
+        # the version from git state.
+        run: dotnet build RecordForge.Generator/Subro.RecordForge.Generator.csproj -c Release --no-restore
+
+      - name: Collect nupkg artifacts
+        run: |
+          mkdir -p artifacts
+          cp RecordForge.Generator/bin/Release/*.nupkg artifacts/
+          ls -la artifacts
+
+      - name: Upload nupkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg
+          if-no-files-found: error
+
+      # NuGet login is deliberately placed immediately before the push: the
+      # temporary API key it issues is valid for ~1 hour.
+      - name: NuGet login (OIDC -> temporary API key)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        run: >-
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

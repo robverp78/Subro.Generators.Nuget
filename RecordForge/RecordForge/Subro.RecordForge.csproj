@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<LangVersion>12.0</LangVersion>
+		<!--
+			This project is *not* packed directly. It is the runtime library that ships
+			inside the Subro.RecordForge NuGet, which is produced by the sibling generator
+			project (..\RecordForge.Generator\Subro.RecordForge.Generator.csproj). That
+			project has a ProjectReference to this one (single source of truth for the
+			attribute / constant definitions) and, at pack time, embeds this DLL under
+			lib/netstandard2.0/ and its own DLL under analyzers/dotnet/cs/.
+		-->
+		<IsPackable>false</IsPackable>
+		<!--
+			AssemblyName stays 'Subro.RecordForge' (consumers load lib/netstandard2.0/Subro.RecordForge.dll),
+			but we give the project an explicit, distinct PackageId so the NuGet restore graph
+			doesn't see two projects claiming the same package identity (the generator project
+			publishes the real 'Subro.RecordForge' package). This id is never actually
+			published because of IsPackable=false.
+		-->
+		<PackageId>Subro.RecordForge.Runtime</PackageId>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- IsExternalInit is only needed to make the attribute's init-only properties compile; it should not end up in the package. -->
+		<Compile Update="IsExternalInit.cs">
+			<BuildAction>Compile</BuildAction>
+			<CopyToOutput>false</CopyToOutput>
+			<Pack>false</Pack>
+		</Compile>
+	</ItemGroup>
+
+</Project>

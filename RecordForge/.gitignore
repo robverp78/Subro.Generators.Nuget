@@ -1,0 +1,116 @@
+## .NET / C#
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# NuGet
+*.nupkg
+*.snupkg
+# NuGet Symbol Packages
+*.symbols.nupkg
+# NuGet packages folder
+packages/
+# NuGet v3+ (project.lock.json, project.fragment.lock.json, build output)
+*.lock.json
+!packages.lock.json
+
+# MSBuild
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Roslyn / Source Generators
+# Generated files emitted during build (obj/Generated, GeneratedFiles, etc.)
+**/obj/*/GeneratedFiles/
+**/obj/GeneratedFiles/
+GeneratedFiles/
+*.g.cs
+*.generated.cs
+
+# Blazor / WASM
+wwwroot/_framework/
+dist/
+.blazor/
+
+# Test results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+
+# Coverage
+coverage*/
+*.coverage
+*.coveragexml
+*.cobertura.xml
+
+# Benchmark results
+BenchmarkDotNet.Artifacts/
+
+# dotnet tools
+.config/dotnet-tools.json
+
+# ASP.NET Core
+appsettings.*.json
+!appsettings.*.template.json
+# Uncomment if you want to ignore all environment-specific settings:
+# appsettings.Development.json
+
+# Publish output
+publish/
+PublishProfiles/
+
+# Azure Functions
+local.settings.json
+
+## OS
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+## Misc
+
+# Editor directories and files
+*.swp
+*.swo
+*.tmp
+*.bak
+*.orig

@@ -1,0 +1,195 @@
+@page "/"
+@using RecordForge.WebTest.Components
+@using RecordForge.WebTest.Services
+@inject RecordGenerationService GenerationService
+
+<PageTitle>Generate Record</PageTitle>
+
+
+<div class="gr-shell">
+    <header class="gr-header">
+        <span class="gr-header-icon">⬡</span>
+        <h1 class="gr-title">Record Generator</h1>
+        <span class="gr-subtitle">Source → Generated Record</span>
+        <p class="gr-info">This page is a test &amp; example platform for the <a href="https://www.nuget.org/packages/Subro.RecordForge" target="_blank" rel="noopener noreferrer">Subro.RecordForge NuGet package</a>.</p>
+    </header>
+
+    <div class="gr-workspace">
+
+        <!-- ── LEFT: Settings ── -->
+        <SettingsPanel @bind-GeneratedAttribute="GeneratedAttribute" />
+
+        <!-- ── RIGHT: Source column (namespace+usings on the left, interface/extra on the right) ── -->
+        <section class="gr-source-group">
+
+            <header class="gr-source-header">
+                <span class="gr-source-heading">SOURCE</span>
+                <div class="gr-source-tabs" role="tablist">
+                    <button type="button"
+                            role="tab"
+                            class="gr-source-tab @(ActiveTab == SourceTab.Interface ? "gr-source-tab--active" : "")"
+                            @onclick="() => ActiveTab = SourceTab.Interface">
+                        Source interface
+                    </button>
+                    <button type="button"
+                            role="tab"
+                            class="gr-source-tab @(ActiveTab == SourceTab.Extra ? "gr-source-tab--active" : "")"
+                            @onclick="() => ActiveTab = SourceTab.Extra">
+                        Extra code
+                        @if (!string.IsNullOrWhiteSpace(ExtraCode))
+                        {
+                            <span class="gr-source-tab-dot" title="Extra code present"></span>
+                        }
+                    </button>
+                </div>
+            </header>
+
+            <div class="gr-source-body">
+
+                <!-- Left: namespace + usings stacked -->
+                <div class="gr-source-left">
+                    <div class="gr-panel gr-source-namespace">
+                        <div class="gr-panel-label">Interface namespace</div>
+                        <div class="gr-panel-description">Optional. If set, the interface is wrapped in this namespace when compiling.</div>
+                        <input class="gr-source-input" type="text"
+                               @bind="InterfaceNamespace"
+                               placeholder="e.g. MyCompany.MyLib" />
+                    </div>
+
+                    <CodePanel Label="Usings"
+                               @bind-Code="Usings"
+                               Description="Extra using directives (one per line). 'using Subro.RecordForge;' is added automatically."
+                               Placeholder="// e.g. using System.Collections.Generic;"
+                               ModifierClass="gr-source-usings" />
+                </div>
+
+                <!-- Right: the active tab content -->
+                <div class="gr-source-right">
+                    @if (ActiveTab == SourceTab.Interface)
+                    {
+                        <CodePanel Label="Source interface"
+                                   @bind-Code="SourceCode"
+                                   Description="Only paste the interface here, without namespace or usings. Interface only."
+                                   Placeholder="// Paste your C# interface here…"
+                                   ModifierClass="gr-source-interface" />
+                    }
+                    else
+                    {
+                        <CodePanel Label="Extra code"
+                                   @bind-Code="ExtraCode"
+                                   Description="Other classes / namespaces. Compiled as a separate syntax tree alongside the interface."
+                                   Placeholder="// Additional types, namespaces, …"
+                                   ModifierClass="gr-source-extra" />
+                    }
+                </div>
+
+            </div><!-- /.gr-source-body -->
+
+        </section>
+
+    </div><!-- /.gr-workspace -->
+
+    <CodePanel 
+               Label="Attribute"
+               Height="8.5rem"
+               Code="@GeneratedAttribute"
+               ReadOnly="true"
+               ShowCopyButton="true"
+               Description="The attribute that would be added to the interface, based on the settings"
+               Placeholder="// Generated attribute" />
+
+    <!-- ── Generate Button ── -->
+    <div class="gr-action-bar">
+        <button class="gr-generate-btn" @onclick="GenerateRecord" disabled="@(string.IsNullOrWhiteSpace(SourceCode))">
+            <span class="gr-btn-icon">▶</span>
+            Generate Record
+        </button>
+    </div>
+
+    <!-- ── Diagnostics (only when present) ── -->
+    @if (GenerationDiagnostics.Count > 0)
+    {
+        <div class="gr-diagnostics-panel">
+            <div class="gr-diagnostics-label">DIAGNOSTICS</div>
+            @foreach (var msg in GenerationDiagnostics)
+            {
+                var isError = msg.StartsWith("[Error]");
+                <div class="gr-diagnostic-item @(isError ? "gr-diagnostic--error" : "gr-diagnostic--warning")">@msg</div>
+            }
+        </div>
+    }
+
+    <!-- ── Output (only when result exists) ── -->
+    <CodePanel Label="Generated type"
+               Code="@GeneratedCode"
+               Height="480px"
+               ReadOnly="true"
+               ShowCopyButton="true"
+               HideWhenEmpty="true"
+               ModifierClass="gr-panel--output" />
+</div>
+
+
+@code {
+
+
+    // ── Bound properties ─────────────────────────────────────────────────────────────────
+
+    private string InterfaceNamespace { get; set; } = "Test";
+
+    private string Usings { get; set; } = """
+using System;
+using System.Threading.Tasks;
+""";
+
+    private string SourceCode { get; set; } = """
+interface IFoo
+{
+    string Bar{get;}
+    int InitInt{get;init;}
+    float Afloat{get;set;}
+}
+""";
+
+    private string ExtraCode { get; set; } = """
+using System;
+using System.Threading.Tasks;
+
+namespace Test
+{
+
+}
+""";
+
+    private enum SourceTab { Interface, Extra }
+    private SourceTab ActiveTab { get; set; } = SourceTab.Interface;
+
+    private string GeneratedCode { get; set; } = string.Empty;
+    private IReadOnlyList<string> GenerationDiagnostics { get; set; } = [];
+    private string GeneratedAttribute { get; set; } = "[GenerateRecord]";
+
+    // ── Main generation method ──────────────────────────────────────────────────────
+
+    private void GenerateRecord()
+    {
+        var parts = new List<string> { "using Subro.RecordForge;" };
+
+        if (!string.IsNullOrWhiteSpace(Usings))
+            parts.Add(Usings.Trim());
+
+        if (!string.IsNullOrWhiteSpace(InterfaceNamespace))
+            parts.Add($"namespace {InterfaceNamespace.Trim()};");
+
+        parts.Add(GeneratedAttribute);
+        parts.Add(SourceCode);
+
+        var mainSource = string.Join(Environment.NewLine, parts);
+        var extraSource = !string.IsNullOrWhiteSpace(ExtraCode)
+            ? ExtraCode
+            : null;
+
+        var result = GenerationService.Generate(mainSource, extraSource);
+        GeneratedCode = result.Code ?? string.Empty;
+        GenerationDiagnostics = result.Diagnostics;
+    }
+}

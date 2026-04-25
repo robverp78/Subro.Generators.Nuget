@@ -1,0 +1,4 @@
+[submodule "external/Subro.Generators.Core"]
+	path = external/Subro.Generators.Core
+	url = https://github.com/robverp78/Subro.Generators.Core.git
+	branch = main

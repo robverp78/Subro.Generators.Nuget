@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="readme.md" />
+  </Folder>
+  <Project Path="../Subro.Generators.Core/Subro.Generators.Core.shproj" Id="5540db92-dde2-4e6c-8a44-7257b0d10d27" />
+  <Project Path="Subro.Json.Generator/Subro.Json.Generator.csproj" />
+  <Project Path="Subro.Json.Shared/Subro.Json.Shared.shproj" Id="75cfa417-843e-462d-8401-17fb73f8030e" />
+  <Project Path="Subro.Json.Test/Subro.Json.Test.csproj" Id="8f1d64e9-778e-493e-bf8f-cf6b46aaf261" />
+  <Project Path="Subro.Json/Subro.Json.csproj" />
+</Solution>
