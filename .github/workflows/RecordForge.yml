@@ -1,0 +1,156 @@
+# .github/workflows/recordforge.yml
+#
+# Versioning is managed manually via Directory.Build.props (<Version>x.y.z</Version>).
+# To publish a new NuGet package version, bump the version there and create a
+# GitHub Release. NuGet publishing only runs on release events, not every push.
+# GitHub Pages and tests run on every push to main.
+#
+# NOTE: The trusted-publishing policy on nuget.org must reference this exact
+# workflow filename ('recordforge.yml').
+
+name: RecordForge CI/CD
+
+on:
+  push:
+    branches: ["main"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: recordforge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  # ── 1. Build core + generator, produce the .nupkg ──────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: RecordForge
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore RecordForge.Generator/Subro.RecordForge.Generator.csproj
+
+      - name: Build & pack (Release)
+        run: dotnet build RecordForge.Generator/Subro.RecordForge.Generator.csproj -c Release --no-restore
+
+      - name: Collect nupkg
+        run: |
+          mkdir -p artifacts
+          cp RecordForge.Generator/bin/Release/*.nupkg artifacts/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: RecordForge/artifacts/*.nupkg   # relative to repo root, not working-directory
+          if-no-files-found: error
+
+
+  # ── 2a. Run tests ───────────────────────────────────────────────────────────
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: RecordForge
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test RecordForge.Tests/RecordForge.Tests.csproj -c Release
+
+
+  # ── 2b. Publish Blazor WASM to GitHub Pages ─────────────────────────────────
+  # Runs in parallel with tests after build succeeds.
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    defaults:
+      run:
+        working-directory: RecordForge
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish Blazor WASM
+        run: dotnet publish RecordForge.WebTest/RecordForge.WebTest.csproj -c Release -o publish
+
+      - name: Fix base href for GitHub Pages
+        run: sed -i 's|<base href="/" />|<base href="/RecordForge/" />|g' publish/wwwroot/index.html
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: RecordForge/publish/wwwroot   # relative to repo root
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+
+  # ── 3. Publish to NuGet.org ─────────────────────────────────────────────────
+  # Only runs when a GitHub Release is published — not on every push to main.
+  # Waits for tests to pass before shipping.
+  # Uses the nupkg artifact from the build job — same binary that was tested.
+  publish-nuget:
+    needs: [build, test]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: NuGet login (OIDC)
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        run: >-
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
