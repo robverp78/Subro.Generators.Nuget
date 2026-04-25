@@ -4,8 +4,11 @@
     <Project Path="RecordForge.Generator/Subro.RecordForge.Generator.csproj" />
     <Project Path="RecordForge/Subro.RecordForge.csproj" />
   </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+  </Folder>
   <Folder Name="/Tests/">
-    <Project Path="../Subro.Generators/TestBase/Subro.Generators.TestBase.csproj" />
+    <Project Path="../Subro.Generators.TestBase/Subro.Generators.TestBase.csproj" />
     <Project Path="RecordForge.Tests/Subro.RecordForge.Tests.csproj" />
     <Project Path="RecordForge.WebTest/RecordForge.WebTest.csproj" Id="403f8a21-94d6-41e7-9882-58aead94fc0d" />
   </Folder>

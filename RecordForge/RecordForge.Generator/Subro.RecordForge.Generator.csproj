@@ -81,12 +81,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!--
-			Single source of truth: the generator compiles against the real runtime types.
-			PrivateAssets="all" keeps the runtime project from surfacing as a NuGet
-			dependency (it is packed inline under lib/netstandard2.0/ by _PackRecordForgeNupkg).
-		-->
-		<ProjectReference Include="..\RecordForge\Subro.RecordForge.csproj" PrivateAssets="all" />
+	  <ProjectReference Include="..\RecordForge\Subro.RecordForge.csproj" />
 	</ItemGroup>
 
 	<!--
@@ -111,7 +106,7 @@
 		<UseLocalSharedCore Condition="'$(Configuration)' == 'Debug' AND Exists('$(SharedCoreLocal)')">true</UseLocalSharedCore>
 	</PropertyGroup>
 
-	<Import Project="$(SharedCoreLocal)"     Condition="'$(UseLocalSharedCore)' == 'true'" Label="Core (local)" />
+	<Import Project="$(SharedCoreLocal)" Condition="'$(UseLocalSharedCore)' == 'true'" Label="Core (local)" />
 	<Import Project="$(SharedCoreSubmodule)" Condition="'$(UseLocalSharedCore)' != 'true'" Label="Core (submodule)" />
 
 	<!--

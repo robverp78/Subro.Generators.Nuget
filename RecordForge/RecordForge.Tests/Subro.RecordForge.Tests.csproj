@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
+
     <Nullable>enable</Nullable>
     <OutputType>Exe</OutputType>
 	  <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
@@ -15,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Subro.Generators\TestBase\Subro.Generators.TestBase.csproj" />
+    <ProjectReference Include="..\..\Subro.Generators.TestBase\Subro.Generators.TestBase.csproj" />
     <ProjectReference Include="..\RecordForge.Generator\Subro.RecordForge.Generator.csproj" />
     <ProjectReference Include="..\RecordForge\Subro.RecordForge.csproj" />
   </ItemGroup>
