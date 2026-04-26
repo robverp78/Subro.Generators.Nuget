@@ -76,8 +76,11 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Build tests
+        run: dotnet build RecordForge.Tests/Subro.RecordForge.Tests.csproj -c Release
+
       - name: Test
-        run: dotnet test RecordForge.Tests/Subro.RecordForge.Tests.csproj -c Release
+        run: dotnet run --project RecordForge.Tests/Subro.RecordForge.Tests.csproj -c Release -- --report-trx
 
 
   # ── 2b. Publish Blazor WASM to GitHub Pages ─────────────────────────────────
