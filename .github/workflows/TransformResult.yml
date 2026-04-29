@@ -1,0 +1,87 @@
+# .github/workflows/TransformResult.yml
+#
+# Versioning is managed manually via <Version> in Subro.Generators.TransformResult.csproj.
+# Publishing only runs when the local version is strictly greater than the latest
+# version already on NuGet.org — bump the version in the csproj to trigger a release.
+#
+# NOTE: The trusted-publishing policy on nuget.org must reference this exact
+# workflow filename ('transformresult.yml').
+
+name: TransformResult CI/CD
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'TransformResult/**'
+      - '.github/workflows/TransformResult.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: transformresult-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  publish-nuget:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: TransformResult
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Read local version
+        id: local-version
+        run: |
+          VERSION=$(grep -oP '<Version>\K[^<]+' Subro.Generators.TransformResult.csproj)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Local version: $VERSION"
+
+      - name: Check published version on NuGet
+        id: nuget-check
+        run: |
+          PACKAGE="subro.generators.transformresult"
+          LOCAL="${{ steps.local-version.outputs.version }}"
+
+          RESPONSE=$(curl -sf "https://api.nuget.org/v3-flatcontainer/${PACKAGE}/index.json" \
+            || echo '{"versions":[]}')
+          PUBLISHED=$(echo "$RESPONSE" | jq -r '.versions[-1] // "0.0.0"')
+
+          echo "Published version: $PUBLISHED"
+          echo "Local version:     $LOCAL"
+
+          HIGHEST=$(printf '%s\n%s\n' "$LOCAL" "$PUBLISHED" | sort -V | tail -1)
+          if [ "$HIGHEST" = "$LOCAL" ] && [ "$LOCAL" != "$PUBLISHED" ]; then
+            echo "should-publish=true" >> "$GITHUB_OUTPUT"
+            echo "Local version is newer — will publish."
+          else
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+            echo "Local version is not newer than published ($PUBLISHED) — skipping publish."
+          fi
+
+      - name: Build & pack (Release)
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: dotnet build Subro.Generators.TransformResult.csproj -c Release
+
+      - name: NuGet login (OIDC)
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: >-
+          dotnet nuget push "bin/Release/*.nupkg"
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate

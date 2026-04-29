@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- Opt the consuming project into the Viaduct interceptor namespace.
+         This is required for the [InterceptsLocation] attributes emitted by the
+         Viaduct source generator to be recognised by the C# compiler. -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Viaduct.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+</Project>

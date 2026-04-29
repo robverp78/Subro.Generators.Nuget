@@ -7,6 +7,11 @@
   <Folder Name="/Other/">
     <Project Path="../Subro.Generators.Core/Subro.Generators.Core.shproj" Id="5540db92-dde2-4e6c-8a44-7257b0d10d27" />
     <Project Path="../Subro.Generators.TestBase/Subro.Generators.TestBase.csproj" />
+    <Project Path="../TransformResult/Subro.Generators.TransformResult.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="README.md" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="Viaduct.GeneratorTests/Viaduct.GeneratorTests.csproj" Id="c6c9d998-d5d4-4d57-b7f1-e7812324cca9" />

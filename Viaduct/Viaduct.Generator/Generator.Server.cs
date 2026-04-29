@@ -122,7 +122,7 @@ namespace {{GeneratedNameSpace}}
             var baseRouteParams = GetRouteParameters(basePath).ToList();
 
             //add mappings
-            StringBuilder sbMethod = null;
+            StringBuilder? sbMethod = null;
 """);
 
             foreach (var method in info.Methods)

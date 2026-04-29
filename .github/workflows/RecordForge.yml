@@ -13,6 +13,9 @@ name: RecordForge CI/CD
 on:
   push:
     branches: ["main"]
+    paths:
+      - 'RecordForge/**'
+      - '.github/workflows/RecordForge.yml'
   release:
     types: [published]
   workflow_dispatch:

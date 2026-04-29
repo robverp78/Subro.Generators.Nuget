@@ -1,13 +1,20 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	  <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-	  <LangVersion>14</LangVersion>
-	  <ImplicitUsings>enable</ImplicitUsings>
-	  <Nullable>enable</Nullable>
-	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
-	  <IsAotCompatible>true</IsAotCompatible>
-	  <IsTrimmable>true</IsTrimmable>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>14</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
+
+    <PackageId>Viaduct.Core</PackageId>
+    <Title>Viaduct.Core</Title>
+    <Description>
+      Shared attributes and base types for Viaduct.
+      Reference this package from interface/shared projects that need Viaduct attributes
+      (BasePath, CustomRoute, HttpMethodType, ViaductIgnore) without pulling in any
+      server or client runtime.
+    </Description>
   </PropertyGroup>
 
   <Import Project="..\Viaduct.Shared\Viaduct.Shared.projitems" Label="Shared" />

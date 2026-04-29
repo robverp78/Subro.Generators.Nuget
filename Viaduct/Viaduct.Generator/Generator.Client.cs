@@ -165,7 +165,7 @@ namespace {GeneratedNameSpace}
                     ").AppendAssignUrlFunction(method).AppendPathReference(method).Append(';');
 
                         //if any parameter has upper case chars, there needs to be a 'tolowercase' variant
-                        if (method.QueryParameters.SelectMany(p => p.Name).Any(char.IsUpper))
+                        if (method.QueryParameters.Any(static p => p.Name.Any(char.IsUpper)))
                         {
                             sb.Append(@"
                 else if(Options.").Append(nameof(ViaductOptions.ForceLowerCaseRouteParameters)).Append(@")

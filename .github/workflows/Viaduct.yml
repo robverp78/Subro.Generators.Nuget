@@ -1,0 +1,98 @@
+name: Publish Viaduct NuGet packages
+
+# Triggered manually from the GitHub Actions UI.
+# Bump Version in Viaduct/Directory.Build.props, push, then click "Run workflow".
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push the git tag
+
+    # All run steps execute relative to the Viaduct subfolder.
+    defaults:
+      run:
+        working-directory: Viaduct
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.x
+            9.x
+            10.x
+
+      # Read the version directly from Directory.Build.props using MSBuild.
+      # This is the single source of truth — no tag needed before running the workflow.
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(dotnet msbuild Directory.Build.props \
+            -getProperty:Version \
+            --nologo \
+            -verbosity:quiet)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Publishing version $VERSION"
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      # Pack in dependency order. ProjectReferences are automatically translated
+      # to versioned PackageReferences in the generated .nuspec files.
+      - name: Pack
+        run: |
+          pack() {
+            dotnet pack "$1" \
+              --configuration Release \
+              --no-build \
+              --output ./nupkgs
+          }
+
+          pack Viaduct.Core/Viaduct.Core.csproj
+          pack Viaduct.Generator/Viaduct.Generator.csproj
+          pack Viaduct/Viaduct.Server.csproj
+          pack Viaduct.Client/Viaduct.Client.csproj
+          pack Viaduct.Meta/Viaduct.csproj
+
+      - name: Push packages
+        env:
+          NUGET_KEY: ${{ secrets.NUGET_API_KEY }}
+          SOURCE: https://api.nuget.org/v3/index.json
+        run: |
+          push() {
+            dotnet nuget push "$1" \
+              --api-key $NUGET_KEY \
+              --source $SOURCE \
+              --skip-duplicate
+          }
+
+          push ./nupkgs/Viaduct.Core.*.nupkg
+          push ./nupkgs/Viaduct.Generator.*.nupkg
+          push ./nupkgs/Viaduct.Server.*.nupkg
+          push ./nupkgs/Viaduct.Client.*.nupkg
+          push ./nupkgs/Viaduct.*.nupkg
+
+      # Unlist Viaduct.Generator immediately after pushing.
+      # It stays resolvable as a transitive dependency but disappears from search results.
+      - name: Unlist Viaduct.Generator
+        env:
+          NUGET_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget delete Viaduct.Generator ${{ steps.version.outputs.version }} \
+            --api-key $NUGET_KEY \
+            --source https://api.nuget.org/v3/index.json \
+            --non-interactive
+
+      # Create a git tag so the release is traceable in source history.
+      # Runs last — if any publish step fails, no tag is created.
+      - name: Tag release
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag viaduct/v${{ steps.version.outputs.version }}
+          git push origin viaduct/v${{ steps.version.outputs.version }}

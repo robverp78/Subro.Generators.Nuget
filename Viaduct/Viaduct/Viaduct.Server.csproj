@@ -1,31 +1,51 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	  <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
-	  <LangVersion>14</LangVersion>
-	  <ImplicitUsings>enable</ImplicitUsings>
-	  <Nullable>enable</Nullable>
-	  <IsAotCompatible>true</IsAotCompatible>
-	  <IsTrimmable>true</IsTrimmable>
-	  <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>14</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsTrimmable>true</IsTrimmable>
 
-	  <!-- Package metadata for NuGet -->
-	  <PackageId>Viaduct</PackageId>
-	  <Title>Viaduct - The bridge between di httpclient and server minimal api</Title>
-	  <Description>Automatic HTTP endpoint and client proxy generation from service interfaces using source generators. Map your DI services to HTTP endpoints with zero boilerplate.</Description>
-	  <Authors>Robert Verpalen</Authors>
-	  <PackageTags>aspnetcore;webapi;dependency-injection;code-generation;http-client;minimal-api;source-generator</PackageTags>
-	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
-	  <PackageReadmeFile>README.md</PackageReadmeFile>
-	  <Company>Subro Software</Company>	  
+    <PackageId>Viaduct.Server</PackageId>
+    <Title>Viaduct.Server</Title>
+    <Description>
+      Server-side runtime for Viaduct. Automatically maps DI service interfaces to
+      ASP.NET Core Minimal API endpoints via the Viaduct source generator.
+      Install this package in your ASP.NET Core server project.
+    </Description>
   </PropertyGroup>
 
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
+  <!--
+    The generator is referenced as a ProjectReference here so that:
+      - Local development and debugging work exactly as before (ProjectReference semantics).
+      - When this project is packed, MSBuild translates it to a PackageReference in the
+        .nuspec automatically, using the same Version from Directory.Build.props.
+        Consumers therefore receive Viaduct.Generator as a transitive dependency without
+        any manual step.
 
-	<ItemGroup>
-	  <ProjectReference Include="..\..\Subro.Json\Subro.Json\Subro.Json.csproj" />
-	  <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" />
-	</ItemGroup>
+    OutputItemType="Analyzer"        → the generator runs on projects that reference this package.
+    ReferenceOutputAssembly="false"  → the generator DLL is not added to compilation references.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Viaduct.Generator\Viaduct.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" />
+    <ProjectReference Include="..\..\Subro.Json\Subro.Json\Subro.Json.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!--
+    Ship a .props file inside the package so that any project that installs Viaduct.Server
+    automatically gets the InterceptorsNamespaces setting — no manual step required.
+    The file name must match the PackageId for NuGet to import it automatically.
+  -->
+  <ItemGroup>
+    <None Include="build\Viaduct.Server.props" Pack="true" PackagePath="build\" />
+  </ItemGroup>
+
 </Project>

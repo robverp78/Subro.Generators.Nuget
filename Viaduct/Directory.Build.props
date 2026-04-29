@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.0.0</Version>
+    <Authors>Robert Verpalen</Authors>
+    <Company>Subro Software</Company>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>aspnetcore;minimal-api;source-generator;dependency-injection;http-client;code-generation</PackageTags>
+
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Required for all projects that consume the Viaduct generator -->
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Viaduct.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
+  <!-- Include the root README in every packable project -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
