@@ -4,8 +4,35 @@
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-	  <LangVersion>14</LangVersion>
+    <LangVersion>14</LangVersion>
+
+    <PackageId>Subro.Json</PackageId>
+    <Description>AOT-friendly JSON serialization library with integrated source generator for .NET 8+.</Description>
+    <PackageTags>json;serialization;source-generator;aot;system-text-json</PackageTags>
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <!-- Build the generator as a dependency; do not add it as an assembly reference. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Subro.Json.Generator\Subro.Json.Generator.csproj"
+                      PrivateAssets="all"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <!-- Bundle the generator DLL in the analyzers/dotnet/cs path inside the NuGet package.
+       This runs in the outer (non-TFM-specific) pack build where $(TargetFramework) is empty. -->
+  <Target Name="_IncludeAnalyzerInPackage" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="$(MSBuildProjectDirectory)/../Subro.Json.Generator/bin/$(Configuration)/netstandard2.0/Subro.Json.Generator.dll"
+            Pack="true"
+            PackagePath="analyzers/dotnet/cs/"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <None Include="..\readme.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
   <Import Project="..\Subro.Json.Shared\Subro.Json.Shared.projitems" Label="Shared" />
 

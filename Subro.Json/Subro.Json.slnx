@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
     <File Path="readme.md" />
   </Folder>
   <Project Path="../Subro.Generators.Core/Subro.Generators.Core.shproj" Id="5540db92-dde2-4e6c-8a44-7257b0d10d27" />

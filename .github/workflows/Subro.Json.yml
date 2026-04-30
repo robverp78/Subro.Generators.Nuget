@@ -1,0 +1,127 @@
+# .github/workflows/Subro.Json.yml
+#
+# Versioning is managed via <Version> in Subro.Json/Directory.Build.props.
+# Publishing only runs when the local version is strictly greater than the latest
+# version already on NuGet.org — bump the version there to trigger a release.
+#
+# The package is unlisted immediately after publishing so it does not appear in
+# NuGet search results while still being installable by exact version reference.
+#
+# NuGet trusted publishing (OIDC) is used for authentication. Configure a trusted
+# publisher on nuget.org for this package pointing to this exact workflow file
+# (subro.json.yml). The generated API key is also used for the unlist step, so
+# the trusted publisher policy must include the "Unlist package" scope.
+# Required secret: NUGET_USER (your nuget.org username).
+
+name: Publish Subro.Json NuGet package
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'Subro.Json/**'
+      - '.github/workflows/Subro.Json.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: subro-json-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push the git tag
+      id-token: write   # needed for NuGet OIDC trusted publishing
+
+    defaults:
+      run:
+        working-directory: Subro.Json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.x
+            9.x
+            10.x
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(dotnet msbuild Directory.Build.props \
+            -getProperty:Version \
+            --nologo \
+            -verbosity:quiet)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Local version: $VERSION"
+
+      - name: Check published version on NuGet
+        id: nuget-check
+        run: |
+          PACKAGE="subro.json"
+          LOCAL="${{ steps.version.outputs.version }}"
+
+          RESPONSE=$(curl -sf "https://api.nuget.org/v3-flatcontainer/${PACKAGE}/index.json" \
+            || echo '{"versions":[]}')
+          PUBLISHED=$(echo "$RESPONSE" | jq -r '.versions[-1] // "0.0.0"')
+
+          echo "Published version: $PUBLISHED"
+          echo "Local version:     $LOCAL"
+
+          HIGHEST=$(printf '%s\n%s\n' "$LOCAL" "$PUBLISHED" | sort -V | tail -1)
+          if [ "$HIGHEST" = "$LOCAL" ] && [ "$LOCAL" != "$PUBLISHED" ]; then
+            echo "should-publish=true" >> "$GITHUB_OUTPUT"
+            echo "Local version is newer — will publish."
+          else
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+            echo "Local version is not newer than published ($PUBLISHED) — skipping publish."
+          fi
+
+      - name: Build
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: dotnet build Subro.Json/Subro.Json.csproj --configuration Release
+
+      - name: Pack
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: |
+          dotnet pack Subro.Json/Subro.Json.csproj \
+            --configuration Release \
+            --no-build \
+            --output ./nupkgs
+
+      - name: NuGet login (OIDC)
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        id: login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: |
+          dotnet nuget push ./nupkgs/*.nupkg \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      # Unlist immediately so the package does not appear in NuGet search results.
+      # It remains installable via exact version reference (e.g. as a transitive dep).
+      - name: Unlist package
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: |
+          dotnet nuget delete Subro.Json ${{ steps.version.outputs.version }} \
+            --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --non-interactive
+
+      - name: Tag release
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag subro.json/v${{ steps.version.outputs.version }}
+          git push origin subro.json/v${{ steps.version.outputs.version }}
