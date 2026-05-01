@@ -1,9 +1,25 @@
 name: Publish Viaduct NuGet packages
 
-# Triggered manually from the GitHub Actions UI.
-# Bump Version in Viaduct/Directory.Build.props, push, then click "Run workflow".
+# Triggered automatically when the version in Viaduct/Directory.Build.props is bumped,
+# or manually from the GitHub Actions UI.
+# Only publishes when the local version is strictly newer than the one on NuGet.org.
+# Tests always run on every push regardless of whether a publish is needed.
+#
+# Viaduct depends on Subro.Json at runtime (project refs become NuGet deps in the
+# generated .nuspec). The workflow waits until the required Subro.Json version is
+# visible on NuGet.org before pushing, so consumers can resolve the dependency immediately.
+
 on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'Viaduct/**'
+      - '.github/workflows/Viaduct.yml'
   workflow_dispatch:
+
+concurrency:
+  group: viaduct-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -11,7 +27,6 @@ jobs:
     permissions:
       contents: write   # needed to push the git tag
 
-    # All run steps execute relative to the Viaduct subfolder.
     defaults:
       run:
         working-directory: Viaduct
@@ -27,8 +42,6 @@ jobs:
             9.x
             10.x
 
-      # Read the version directly from Directory.Build.props using MSBuild.
-      # This is the single source of truth — no tag needed before running the workflow.
       - name: Read version
         id: version
         run: |
@@ -37,14 +50,74 @@ jobs:
             --nologo \
             -verbosity:quiet)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Publishing version $VERSION"
+          echo "Local version: $VERSION"
+
+      - name: Check published version on NuGet
+        id: nuget-check
+        run: |
+          PACKAGE="viaduct.core"
+          LOCAL="${{ steps.version.outputs.version }}"
+
+          RESPONSE=$(curl -sf "https://api.nuget.org/v3-flatcontainer/${PACKAGE}/index.json" \
+            || echo '{"versions":[]}')
+          PUBLISHED=$(echo "$RESPONSE" | jq -r '.versions[-1] // "0.0.0"')
+
+          echo "Published version: $PUBLISHED"
+          echo "Local version:     $LOCAL"
+
+          HIGHEST=$(printf '%s\n%s\n' "$LOCAL" "$PUBLISHED" | sort -V | tail -1)
+          if [ "$HIGHEST" = "$LOCAL" ] && [ "$LOCAL" != "$PUBLISHED" ]; then
+            echo "should-publish=true" >> "$GITHUB_OUTPUT"
+            echo "Local version is newer — will publish."
+          else
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+            echo "Local version is not newer than published ($PUBLISHED) — skipping publish."
+          fi
+
+      # Viaduct.Meta is not in Viaduct.slnx, so it must be restored and built explicitly.
+      - name: Restore
+        run: |
+          dotnet restore
+          dotnet restore Viaduct.Meta/Viaduct.csproj
 
       - name: Build
-        run: dotnet build --configuration Release
+        run: |
+          dotnet build --configuration Release --no-restore
+          dotnet build Viaduct.Meta/Viaduct.csproj --configuration Release --no-restore
 
-      # Pack in dependency order. ProjectReferences are automatically translated
-      # to versioned PackageReferences in the generated .nuspec files.
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+      # Wait until the Subro.Json version this build depends on is available on NuGet.org.
+      # Passes immediately when Subro.Json was not changed in the same push.
+      # Times out after ~10 minutes (20 × 30 s) if the Subro.Json workflow is still running.
+      - name: Wait for Subro.Json on NuGet
+        if: steps.nuget-check.outputs.should-publish == 'true'
+        run: |
+          SUBRO_JSON_VERSION=$(dotnet msbuild ../Subro.Json/Directory.Build.props \
+            -getProperty:Version \
+            --nologo \
+            -verbosity:quiet)
+          echo "Required Subro.Json version: $SUBRO_JSON_VERSION"
+
+          for i in $(seq 1 20); do
+            RESPONSE=$(curl -sf "https://api.nuget.org/v3-flatcontainer/subro.json/index.json" \
+              || echo '{"versions":[]}')
+            if echo "$RESPONSE" | jq -e --arg v "$SUBRO_JSON_VERSION" \
+                '.versions[] | select(. == $v)' > /dev/null 2>&1; then
+              echo "Subro.Json $SUBRO_JSON_VERSION is available on NuGet."
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              echo "Timed out waiting for Subro.Json $SUBRO_JSON_VERSION on NuGet."
+              exit 1
+            fi
+            echo "Attempt $i/20: not yet available, retrying in 30s..."
+            sleep 30
+          done
+
       - name: Pack
+        if: steps.nuget-check.outputs.should-publish == 'true'
         run: |
           pack() {
             dotnet pack "$1" \
@@ -60,6 +133,7 @@ jobs:
           pack Viaduct.Meta/Viaduct.csproj
 
       - name: Push packages
+        if: steps.nuget-check.outputs.should-publish == 'true'
         env:
           NUGET_KEY: ${{ secrets.NUGET_API_KEY }}
           SOURCE: https://api.nuget.org/v3/index.json
@@ -77,9 +151,8 @@ jobs:
           push ./nupkgs/Viaduct.Client.*.nupkg
           push ./nupkgs/Viaduct.*.nupkg
 
-      # Unlist Viaduct.Generator immediately after pushing.
-      # It stays resolvable as a transitive dependency but disappears from search results.
       - name: Unlist Viaduct.Generator
+        if: steps.nuget-check.outputs.should-publish == 'true'
         env:
           NUGET_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
@@ -88,9 +161,8 @@ jobs:
             --source https://api.nuget.org/v3/index.json \
             --non-interactive
 
-      # Create a git tag so the release is traceable in source history.
-      # Runs last — if any publish step fails, no tag is created.
       - name: Tag release
+        if: steps.nuget-check.outputs.should-publish == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
