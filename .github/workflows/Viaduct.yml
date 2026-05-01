@@ -86,7 +86,14 @@ jobs:
           dotnet build Viaduct.Meta/Viaduct.csproj --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test --configuration Release --no-build
+        run: |
+          dotnet run --project Viaduct.Tests/Viaduct.Tests.csproj \
+            --configuration Release --no-build
+
+          for framework in net8.0 net9.0 net10.0; do
+            dotnet run --project Viaduct.GeneratorTests/Viaduct.GeneratorTests.csproj \
+              --configuration Release --no-build --framework $framework
+          done
 
       # Wait until the Subro.Json version this build depends on is available on NuGet.org.
       # Passes immediately when Subro.Json was not changed in the same push.
