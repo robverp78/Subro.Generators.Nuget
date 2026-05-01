@@ -35,6 +35,9 @@ namespace Viaduct
             set => field = value.CheckRoutePart();
         }
 
+        /// <summary>
+        /// Determines whether the client should include an authorization header in requests by default and if servers should add an authorization requirement to generated routes.
+        /// </summary>
         public bool RequiresAuthorization { get; set; }
 
         /// <summary>

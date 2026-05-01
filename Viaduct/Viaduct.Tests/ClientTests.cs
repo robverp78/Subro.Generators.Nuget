@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,12 @@ namespace Viaduct.Tests
     [NotInParallel]
     public class ClientTests
     {
+        [After(Test)]
+        public void ResetGlobalOptions()
+        {
+            ViaductServerOptions.Default.UseInterfaceNameForPath = false;
+        }
+
         private record TestApp(IViaductTestInterface Client, WebApplication App, ServiceProvider ClientProvider) : IAsyncDisposable
         {
             public async ValueTask DisposeAsync()
@@ -99,7 +106,7 @@ namespace Viaduct.Tests
         {
             var options = new ViaductClientOptions() { UseRoutePathParameters = UseRoutePathParameters };
             var builder = options.CreateRouteBuildInfo(string.Empty, Path, parameters ?? []);
-            
+
             bool appendPar(StringBuilder sb, string name)
             {
                 var s = name switch
@@ -114,6 +121,64 @@ namespace Viaduct.Tests
 
             var output = options.ResolveMethodRoute(builder,null);
             await Assert.That(output).IsEqualTo(expected ?? Path);
+        }
+
+        [Test]
+        public async Task Client_ThrowsViaductException_On404Response()
+        {
+            // Server with no routes — every call returns 404
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Logging.ClearProviders();
+            ViaductServerOptions.Default.UseInterfaceNameForPath = true;
+            var app = builder.Build();
+            await app.StartAsync();
+            await using var _ = app;
+
+            var testHttpClient = app.GetTestClient();
+            var services = new ServiceCollection();
+            services.AddSingleton(testHttpClient);
+            services.CreateAndAddHttpClient<IViaductTestInterface>(o =>
+            {
+                o.UseInterfaceNameForPath = true;
+                o.BaseUrl = testHttpClient.BaseAddress!.ToString();
+            }).ConfigurePrimaryHttpMessageHandler(() => app.GetTestServer().CreateHandler());
+            await using var provider = services.BuildServiceProvider();
+            var client = provider.GetRequiredService<IViaductTestInterface>();
+
+            ViaductException? caught404 = null;
+            try { await client.ExecuteAsync(); }
+            catch (ViaductException ex) { caught404 = ex; }
+            await Assert.That(caught404).IsNotNull();
+        }
+
+        [Test]
+        public async Task Client_ThrowsViaductException_On500Response()
+        {
+            var builder = WebApplication.CreateBuilder();
+            builder.WebHost.UseTestServer();
+            builder.Logging.ClearProviders();
+            ViaductServerOptions.Default.UseInterfaceNameForPath = true;
+            var app = builder.Build();
+            app.MapPost("/ViaductTestInterface/ExecuteAsync", () => Results.StatusCode(500));
+            await app.StartAsync();
+            await using var _ = app;
+
+            var testHttpClient = app.GetTestClient();
+            var services = new ServiceCollection();
+            services.AddSingleton(testHttpClient);
+            services.CreateAndAddHttpClient<IViaductTestInterface>(o =>
+            {
+                o.UseInterfaceNameForPath = true;
+                o.BaseUrl = testHttpClient.BaseAddress!.ToString();
+            }).ConfigurePrimaryHttpMessageHandler(() => app.GetTestServer().CreateHandler());
+            await using var provider = services.BuildServiceProvider();
+            var client = provider.GetRequiredService<IViaductTestInterface>();
+
+            ViaductException? caught500 = null;
+            try { await client.ExecuteAsync(); }
+            catch (ViaductException ex) { caught500 = ex; }
+            await Assert.That(caught500).IsNotNull();
         }
 
 

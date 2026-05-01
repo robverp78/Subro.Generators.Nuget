@@ -54,10 +54,25 @@ namespace Viaduct
         /// </summary>
         public class ViaductGlobalJsonTypeInfoForwarder : IJsonTypeInfoResolver
         {
+            /// <summary>
+            /// Gets the JsonTypeInfo for the specified type.
+            /// </summary>
+            /// <remarks>Delegates to Options.TypeInfoResolver?.GetTypeInfo(type, options) when a
+            /// resolver is configured.</remarks>
+            /// <param name="type">The type to get metadata for.</param>
+            /// <param name="options">The JsonSerializerOptions to use when resolving the type information.</param>
+            /// <returns>A JsonTypeInfo describing the specified type, or null if no resolver is configured or the type cannot be
+            /// resolved.</returns>
             public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) 
                 => Options.TypeInfoResolver?.GetTypeInfo(type, options);
         }
 
+        /// <summary>
+        /// Default JsonSerializerOptions configured with CommonTypes.Default as the TypeInfoResolver and camel-case
+        /// property naming.
+        /// </summary>
+        /// <remarks>Shared for reuse. Do not modify this instance after it is used concurrently; create a
+        /// new JsonSerializerOptions for customizations.</remarks>
         public static readonly JsonSerializerOptions Options = new()
         {
             TypeInfoResolver = CommonTypes.Default,
@@ -73,7 +88,9 @@ namespace Viaduct
             Options.TypeInfoResolverChain.Insert(0, context);
         }
 
-
+        /// <summary>
+        /// Gets the JsonTypeInfo for a type from the current type resolver chain of the default <see cref="Options"/>, if it exists. This is used internally to get the json type info for parameters and return types, but can also be used as an extra to get the same json type info for use in custom serialization scenarios. If no json type info is found for the type, returns null (and you can fall back to non AOT safe serialization if needed)
+        /// </summary>
         public static JsonTypeInfo<T>? GetTypeInfo<T>()
         {
             if (Options.TryGetTypeInfo(typeof(T), out var builtin) && builtin is JsonTypeInfo<T> builtinTyped)

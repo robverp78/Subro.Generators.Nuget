@@ -22,6 +22,9 @@ namespace Viaduct.Server
     /// </remarks>
     public record ViaductServerOptions : ViaductOptions
     {
+        /// <summary>
+        /// The default options used for mapping endpoints to interfaces. This can be changed to affect all mappings made after the change, but does not affect mappings that were already registered since options are cloned during registration. This allows for chaining of global settings.
+        /// </summary>
         public static readonly ViaductServerOptions Default = new();
     }
 
@@ -205,12 +208,27 @@ namespace Viaduct.Server
         }
     }
 
+    /// <summary>
+    /// Stores endpoint mappers registered during service registration to be applied to an application's
+    /// IEndpointRouteBuilder later.
+    /// </summary>
+    /// <remarks>Intended for use from generated code. Push queues a ViaductEndpointMapper with optional
+    /// ViaductServerOptions during service registration; AddRegisteredEndpoints applies queued mappers when building
+    /// the web application. Thread-safe and uses a LIFO stack. The Count property exposes the current number of pending
+    /// mappers.</remarks>
     public static class PendingMappers
     {
         internal record PendingMapper(ViaductEndpointMapper Mapper, ViaductServerOptions Options);
 
         static readonly ConcurrentStack<PendingMapper> stack = [];
 
+        /// <summary>
+        /// Maps Viaduct server endpoints onto an IEndpointRouteBuilder.
+        /// </summary>
+        /// <remarks>Invoked during application startup when configuring routing for the Viaduct
+        /// server.</remarks>
+        /// <param name="builder">The endpoint route builder used to configure request endpoints.</param>
+        /// <param name="options">ViaductServerOptions that influence how endpoints are mapped.</param>
         public delegate void ViaductEndpointMapper(IEndpointRouteBuilder builder, ViaductServerOptions options);
 
         /// <summary>

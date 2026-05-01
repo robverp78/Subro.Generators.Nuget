@@ -24,6 +24,12 @@ namespace Viaduct.Tests
     [NotInParallel]
     public class EndpointTests
     {
+        [After(Test)]
+        public void ResetGlobalOptions()
+        {
+            ViaductServerOptions.Default.UseInterfaceNameForPath = false;
+        }
+
         private record TestApp(HttpClient Client, WebApplication App) : IAsyncDisposable
         {
           

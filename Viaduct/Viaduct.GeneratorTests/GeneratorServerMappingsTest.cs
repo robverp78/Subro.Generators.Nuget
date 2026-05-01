@@ -175,5 +175,41 @@ namespace Viaduct.Tests
             await Assert.That(result.Diagnostics).Contains(d => d.Id == ViaductErrors.NotAnAsyncMethod.GetCode());
             await Assert.That(result.GeneratorResults.FirstOrDefault()?.GeneratedTrees ?? []).IsNotEmpty();
         }
+
+        [Test]
+        public async Task ViaductIgnoreForServer_ExcludesMethodFromServerMappings()
+        {
+            const string source = Usings + """
+
+                namespace TestApp
+                {
+                    public interface IPartialServerApi
+                    {
+                        Task<string> GetUsers();
+
+                        [ViaductIgnoreForServer]
+                        Task<string> GetClientOnlyData();
+                    }
+
+                    class Startup
+                    {
+                        void Configure()
+                        {
+                            ServerMappings.RegisterEndpoints<IPartialServerApi>();
+                        }
+                    }
+                }
+                """;
+
+            var result = RunGenerator(source);
+
+            var serverMappingCode = string.Join("\r\n", result.GeneratorResults
+                .SelectMany(g => g.GeneratedTrees.Select(t => t.GetText().ToString()))
+                .Where(code => code.Contains("ServerMappings")));
+
+            await Assert.That(serverMappingCode).IsNotEmpty();
+            await Assert.That(serverMappingCode).Contains("GetUsers");
+            await Assert.That(serverMappingCode.Contains("GetClientOnlyData")).IsFalse();
+        }
     }
 }
