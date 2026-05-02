@@ -9,6 +9,7 @@
 
     <PackageId>Viaduct.Client</PackageId>
     <Title>Viaduct.Client</Title>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>
       Client-side runtime for Viaduct. Automatically generates typed HttpClient proxies
       from service interfaces via the Viaduct source generator.
@@ -31,6 +32,7 @@
 
   <ItemGroup>
     <None Include="build\Viaduct.Client.props" Pack="true" PackagePath="build\" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <Import Project="..\Viaduct.Client.Shared\Viaduct.Client.Shared.projitems" Label="Shared" />

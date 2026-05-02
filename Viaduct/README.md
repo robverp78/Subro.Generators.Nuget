@@ -44,15 +44,14 @@ Viaduct generates all the server endpoint handlers and client HTTP calls at comp
 
 ## Packages
 
-> NuGet packages are planned. The split will be:
-
-| Package | Purpose |
+| Package | Use when |
 |---|---|
-| `Viaduct` | Server-side endpoint mapping + the source generator |
-| `Viaduct.Client` | Client-side HTTP proxy + the source generator |
-| `Viaduct.Core` | Shared types (options, attributes, exceptions) |
+| [`Viaduct.Core`](https://www.nuget.org/packages/Viaduct.Core) | Your project defines the shared interface but is not a server or client |
+| [`Viaduct.Server`](https://www.nuget.org/packages/Viaduct.Server) | Your project is the ASP.NET Core server |
+| [`Viaduct.Client`](https://www.nuget.org/packages/Viaduct.Client) | Your project calls the API as an HTTP client |
+| [`Viaduct`](https://www.nuget.org/packages/Viaduct) | Your project needs both (integration tests, monolith) |
 
-Both `Viaduct` and `Viaduct.Client` include the generator. Reference whichever package(s) your project needs; the generator handles only the registrations it finds.
+`Viaduct.Server` and `Viaduct.Client` each include the source generator as a transitive dependency — no separate generator package needed.
 
 ---
 

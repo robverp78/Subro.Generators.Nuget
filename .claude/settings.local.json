@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dotnet build *)"
+      "Bash(dotnet build *)",
+      "Read(//tmp/**)",
+      "Bash(unzip -l Viaduct.Core.0.0.1.nupkg)"
     ]
   }
 }

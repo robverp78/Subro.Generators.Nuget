@@ -9,6 +9,7 @@
 
     <PackageId>Viaduct.Server</PackageId>
     <Title>Viaduct.Server</Title>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>
       Server-side runtime for Viaduct. Automatically maps DI service interfaces to
       ASP.NET Core Minimal API endpoints via the Viaduct source generator.
@@ -46,6 +47,7 @@
   -->
   <ItemGroup>
     <None Include="build\Viaduct.Server.props" Pack="true" PackagePath="build\" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
