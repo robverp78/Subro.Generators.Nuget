@@ -46,9 +46,15 @@ namespace Viaduct.Generation
             {
                 BasePathHasRouteParameters = BasePath is not null && ViaductGeneratorFunctions.HasRouteParameters(BasePath);
                 List<MethodCreationInfo> methodInfoList = [];
-                // Get all methods from the interface
+                // Get all methods from the interface, including those inherited from base interfaces.
+                // GetMembers() only returns directly-declared members, so base-interface methods (e.g. the
+                // members of ICrud<T,Guid> behind ICrudGuid<T>) must be pulled from AllInterfaces. For a
+                // constructed generic, AllInterfaces already has the type arguments substituted.
+                var seen = new HashSet<string>(StringComparer.Ordinal);
                 var methods = type.GetMembers().OfType<IMethodSymbol>()
-                    .Where(m => m.MethodKind == MethodKind.Ordinary); // Exclude property accessors and the likes
+                    .Concat(type.AllInterfaces.SelectMany(static i => i.GetMembers().OfType<IMethodSymbol>()))
+                    .Where(m => m.MethodKind == MethodKind.Ordinary // Exclude property accessors and the likes
+                        && seen.Add(MethodSignatureKey(m)));
 
                 foreach (var method in methods)
                 {
@@ -75,7 +81,64 @@ namespace Viaduct.Generation
                             .CreateWarning(LocationInfo.From(type), "No methods found on {0}", type.Name));
                 }
                 else
-                    Result = new(type.Name, type.ContainingNamespace.ToDisplayString(), BasePath, methodInfoList.ToImmutableArray());
+                {
+                    var methodArray = methodInfoList.ToImmutableArray();
+                    var ns = type.ContainingNamespace.ToDisplayString();
+
+                    // A closed (constructed) generic interface, e.g. ICrudGuid<AddressRecord>. Open generics
+                    // (with unresolved type parameters) are never reached here because the registration call site
+                    // always supplies concrete type arguments.
+                    if (type is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: > 0 } named
+                        && named.TypeArguments.All(static t => t.TypeKind != TypeKind.TypeParameter))
+                    {
+                        var fqn = named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                        Result = new(type.Name, ns, BasePath, methodArray)
+                        {
+                            IsGeneric = true,
+                            FullyQualifiedName = fqn,
+                            Identifier = BuildGenericIdentifier(named, fqn),
+                            TypeArgSegment = BuildTypeArgSegment(named),
+                        };
+                    }
+                    else
+                        Result = new(type.Name, ns, BasePath, methodArray);
+                }
+            }
+
+            /// <summary>Stable key for de-duplicating methods that appear via multiple inherited interfaces.</summary>
+            static string MethodSignatureKey(IMethodSymbol m)
+                => m.Name + "(" + string.Join(",", m.Parameters.Select(static p => p.Type.ToDisplayString())) + ")";
+
+            /// <summary>Route discriminator from the type arguments' short names, e.g. <c>AddressRecord</c> (single arg) or <c>AddressRecord_Guid</c> (multiple).</summary>
+            static string BuildTypeArgSegment(INamedTypeSymbol named)
+                => string.Join("_", named.TypeArguments.Select(static t => Sanitize(t.Name)));
+
+            /// <summary>Class/file-name-safe identifier that encodes the closure, e.g. <c>ICrudGuid_AddressRecord_ab12cd</c>.</summary>
+            static string BuildGenericIdentifier(INamedTypeSymbol named, string fullyQualified)
+            {
+                var mangled = Sanitize(named.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+                return $"{mangled}_{StableShortHash(fullyQualified)}";
+            }
+
+            static string Sanitize(string s)
+            {
+                var chars = s.ToCharArray();
+                for (int i = 0; i < chars.Length; i++)
+                    if (!char.IsLetterOrDigit(chars[i]))
+                        chars[i] = '_';
+                return new string(chars);
+            }
+
+            /// <summary>Deterministic 6-hex-char FNV-1a hash (GetHashCode is randomized per run and unusable for stable names).</summary>
+            static string StableShortHash(string s)
+            {
+                uint hash = 2166136261u;
+                foreach (var c in s)
+                {
+                    hash ^= c;
+                    hash *= 16777619u;
+                }
+                return hash.ToString("x8").Substring(0, 6);
             }
 
 

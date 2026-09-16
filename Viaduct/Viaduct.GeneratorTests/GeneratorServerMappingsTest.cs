@@ -176,6 +176,68 @@ namespace Viaduct.Tests
             await Assert.That(result.GeneratorResults.FirstOrDefault()?.GeneratedTrees ?? []).IsNotEmpty();
         }
 
+        private const string GenericCrudSource = Usings + """
+
+            namespace TestApp
+            {
+                public interface ICrud<TRecord, TKey>
+                {
+                    Task<TKey> CreateNew(TRecord values);
+                    Task<TRecord> GetById(TKey id);
+                }
+
+                // Strong-key alias: only the record type varies, the key is fixed to Guid.
+                public interface ICrudGuid<TRecord> : ICrud<TRecord, System.Guid> { }
+
+                public record AddressRecord(int Id, string Street);
+                public record PersonRecord(int Id, string Name);
+
+                class Startup
+                {
+                    void Configure()
+                    {
+                        ServerMappings.RegisterEndpoints<ICrudGuid<AddressRecord>>();
+                        ServerMappings.RegisterEndpoints<ICrudGuid<PersonRecord>>();
+                    }
+                }
+            }
+            """;
+
+        [Test]
+        public async Task ClosedGenericInterface_GeneratesDistinctMappingsPerClosure()
+        {
+            var result = RunGenerator(GenericCrudSource);
+            var generatedCode = string.Join("\r\n", result.GeneratorResults.SelectMany(g => g.GeneratedTrees.Select(t => t.GetText().ToString())));
+
+            // Inherited members from ICrud<,> are picked up through the closed alias.
+            await Assert.That(generatedCode).Contains("CreateNew");
+            await Assert.That(generatedCode).Contains("GetById");
+
+            // Each closure gets its own mapping class (identifier encodes the type argument).
+            await Assert.That(generatedCode).Contains("ICrudGuid_AddressRecord");
+            await Assert.That(generatedCode).Contains("ICrudGuid_PersonRecord");
+
+            // Routes are disambiguated by the type-argument segment.
+            await Assert.That(generatedCode).Contains("\"AddressRecord\"");
+            await Assert.That(generatedCode).Contains("\"PersonRecord\"");
+
+            // The service is resolved as the fully-qualified closed generic.
+            await Assert.That(generatedCode).Contains("ICrudGuid<global::TestApp.AddressRecord>");
+        }
+
+        [Test]
+        public async Task ClosedGenericInterface_GeneratedCodeCompiles()
+        {
+            var compilation = RunFullPipeline(GenericCrudSource);
+
+            var errors = compilation.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error
+                && !d.ToString().Contains("Viaduct_AotTypes"))
+                .ToArray();
+
+            await Assert.That(errors).IsEmpty();
+        }
+
         [Test]
         public async Task ViaductIgnoreForServer_ExcludesMethodFromServerMappings()
         {

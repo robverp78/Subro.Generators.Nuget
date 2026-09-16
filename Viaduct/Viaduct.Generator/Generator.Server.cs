@@ -59,7 +59,7 @@ namespace Viaduct.Generation
         const string mappingMethodName = "Map";
         public static string CreateServerMappingCode(InterfaceMetaData info, IEnumerable<MethodCallerInfo> callerMethods)
         {
-            string className = $"{info.Name}_Viaduct_ServerMappings";
+            string className = $"{info.Identifier}_Viaduct_ServerMappings";
             string Namespace = info.Namespace;
             var sb = new StringBuilder($$"""
 #nullable enable
@@ -113,7 +113,7 @@ namespace {{GeneratedNameSpace}}
         public static void {{mappingMethodName}}(IEndpointRouteBuilder app, {{serverOptions}} options)
         {
             options ??= {{serverOptions}}.Default;
-            var basePath = {{createGetBasePathCode(info.BasePath, info.Name)}};
+            var basePath = {{createGetBasePathCode(info.BasePath, info.Name, info.TypeArgSegment)}};
             var group = app.MapGroup(basePath);
 
             if(options.RequiresAuthorization)
@@ -195,7 +195,7 @@ namespace {{GeneratedNameSpace}}
                 }
 
                 if (method.Parameters.Length > 0) sb.Append(", ");
-                sb.Append("[FromServices] ").Append(info.Name).Append(@" service) => {");
+                sb.Append("[FromServices] ").Append(info.FullyQualifiedName).Append(@" service) => {");
                 if (method.ReturnsValue)
                     sb.Append("return ");
                 if (method.IsAsync)

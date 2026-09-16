@@ -32,14 +32,34 @@ namespace Viaduct.Generation
 
     public record InterfaceMetaData(
         string Name, string Namespace, [StringSyntax("Route")] string? BasePath,
-        ImmutableArray<MethodCreationInfo> Methods) 
+        ImmutableArray<MethodCreationInfo> Methods)
     {
 
         public override string ToString() => Name;
 
         public readonly string FullName = $"{Namespace}.{Name}";
 
-        //public readonly bool BasePathHasRouteParameters = BasePath is not null && ViaductGeneratorFunctions.HasRouteParameters(BasePath);
+        /// <summary>True when this metadata describes a closed (constructed) generic interface, e.g. <c>ICrudGuid&lt;AddressRecord&gt;</c>.</summary>
+        public bool IsGeneric { get; init; }
+
+        /// <summary>
+        /// Fully-qualified type reference including type arguments (and the <c>global::</c> prefix for generics),
+        /// e.g. <c>global::MyApp.ICrudGuid&lt;global::MyApp.AddressRecord&gt;</c>. Used wherever the interface type is
+        /// referenced in generated code (implemented-interface clause, <c>[FromServices]</c>, DI). Defaults to <see cref="FullName"/>.
+        /// </summary>
+        public string FullyQualifiedName { get => field ?? FullName; init; }
+
+        /// <summary>
+        /// Collision-free identifier safe for use in generated class / file names. For closed generics this encodes the type
+        /// arguments (e.g. <c>ICrudGuid_AddressRecord_ab12cd</c>) so distinct closures never clash. Defaults to <see cref="Name"/>.
+        /// </summary>
+        public string Identifier { get => field ?? Name; init; }
+
+        /// <summary>
+        /// Route discriminator derived from the type arguments of a closed generic (e.g. <c>AddressRecord</c>), or <c>null</c>
+        /// for non-generic interfaces. Used to make endpoint/client routes unique per closure.
+        /// </summary>
+        public string? TypeArgSegment { get; init; }
     }
 
 

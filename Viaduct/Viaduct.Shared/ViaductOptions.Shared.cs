@@ -57,5 +57,13 @@ namespace Viaduct
         /// Default value is <c>true</c>
         /// </summary>
         public bool ForceLowerCaseRouteParameters { get; set; } = true;
+
+        /// <summary>
+        /// For closed generic interfaces (e.g. <c>ICrudGuid&lt;AddressRecord&gt;</c>), controls the ordering of the
+        /// type-argument discriminator relative to the interface-name segment in the generated route.
+        /// When <c>true</c> (default) the route is <c>/{TypeArg}/{InterfaceName}/...</c> (e.g. <c>/AddressRecord/CrudGuid/Create</c>);
+        /// when <c>false</c> it is <c>/{InterfaceName}/{TypeArg}/...</c>. Has no effect on non-generic interfaces.
+        /// </summary>
+        public bool GenericTypeArgPathFirst { get; set; } = true;
     }
 }

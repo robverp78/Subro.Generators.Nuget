@@ -44,7 +44,7 @@ namespace Viaduct.Generation
             var calledMethods = results.Select(static (p, _) => p.Method).Where(static m => m is not null).Collect();
             context.RegisterSourceOutput(calledMethods, static (spc, infos) =>
             {
-                foreach (var group in infos.GroupBy(info => new { info!.IsServerCall, info.InterfaceMetaData.FullName }))
+                foreach (var group in infos.GroupBy(info => new { info!.IsServerCall, info.InterfaceMetaData.FullyQualifiedName }))
                 {
                     MethodCallerInfo[] methods = [.. group!];
                     var ifInfo = methods[0].InterfaceMetaData;
@@ -61,7 +61,7 @@ namespace Viaduct.Generation
                         type = "Client";
                     }
 
-                    spc.AddSource($"Viaduct_{ifInfo.Name}_{type}Mapping.g.cs", generated);
+                    spc.AddSource($"Viaduct_{ifInfo.Identifier}_{type}Mapping.g.cs", generated);
                 }                   
             });          
         }
@@ -111,12 +111,25 @@ namespace {{GeneratedNameSpace}}
 
     internal static class {{HelperFunctionsClass}}
     {
-        public static string {{getBasePathFunctionName}}({{nameof(ViaductOptions)}} options, string? ifBasePath, string interfaceName)
+        public static string {{getBasePathFunctionName}}({{nameof(ViaductOptions)}} options, string? ifBasePath, string interfaceName, string? typeArgSegment = null)
         {
             ifBasePath ??= options.{{nameof(ViaductOptions.InterfaceBasePath)}};
-            if(ifBasePath == null && options.{{nameof(ViaductOptions.UseInterfaceNameForPath)}})
-                ifBasePath = "/" + GetInterfaceName(interfaceName);
-            return options.{{nameof(ViaductOptions.BasePath)}}  + ifBasePath;
+            string interfacePart;
+            if(ifBasePath != null)
+                interfacePart = ifBasePath;
+            else if(options.{{nameof(ViaductOptions.UseInterfaceNameForPath)}} || typeArgSegment != null)
+                interfacePart = "/" + GetInterfaceName(interfaceName);
+            else
+                interfacePart = "";
+
+            if(typeArgSegment != null)
+            {
+                var typePart = "/" + typeArgSegment;
+                return options.{{nameof(ViaductOptions.GenericTypeArgPathFirst)}}
+                    ? options.{{nameof(ViaductOptions.BasePath)}} + typePart + interfacePart
+                    : options.{{nameof(ViaductOptions.BasePath)}} + interfacePart + typePart;
+            }
+            return options.{{nameof(ViaductOptions.BasePath)}} + interfacePart;
         }
 
         static string GetInterfaceName(string name)
@@ -139,8 +152,8 @@ namespace {{GeneratedNameSpace}}
 }
 """;
 
-        internal static string createGetBasePathCode(string? basePath, string interfaceName, string optionsName = "options")
-            => $"{HelperFunctionsClass}.{getBasePathFunctionName}({optionsName}, {(basePath is null ? "null" : $"\"{basePath}\"")}, \"{interfaceName}\")";
+        internal static string createGetBasePathCode(string? basePath, string interfaceName, string? typeArgSegment = null, string optionsName = "options")
+            => $"{HelperFunctionsClass}.{getBasePathFunctionName}({optionsName}, {(basePath is null ? "null" : $"\"{basePath}\"")}, \"{interfaceName}\", {(typeArgSegment is null ? "null" : $"\"{typeArgSegment}\"")})";
 
 
     }

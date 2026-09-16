@@ -36,7 +36,7 @@ namespace Viaduct.Generation
                 readonly MethodInfo[] methods = [.. info.Methods.Select((m,i)=>  new MethodInfo(m,i))];
                 readonly MethodCallerInfo[] callers = [.. methodCallers];
                 readonly StringBuilder sb = new();
-                readonly string ClassName = $"{clientClass}_{info.Name}";
+                readonly string ClassName = $"{clientClass}_{info.Identifier}";
 
 
                 const string clientClass = nameof(ViaductClientBase);
@@ -66,8 +66,8 @@ namespace {GeneratedNameSpace}
                     WriteInterceptors();
 
     sb.Append($@"
-    file class {ClassName}:{clientClass},{info.Namespace}.{info.Name}
-    {{       
+    file class {ClassName}:{clientClass},{info.FullyQualifiedName}
+    {{
         readonly string {BasePathVariable};
 
 ");
@@ -77,7 +77,7 @@ namespace {GeneratedNameSpace}
 
         public {ClassName}(HttpClient client, ").AppendConfigureArg().Append($@") : base(client,  configure)
         {{            
-            {BasePathVariable} = {createGetBasePathCode(info.BasePath, info.Name,"Options")};
+            {BasePathVariable} = {createGetBasePathCode(info.BasePath, info.Name, info.TypeArgSegment, "Options")};
 ").AppendLine();
 
                     writemethodInitializers();
@@ -102,7 +102,7 @@ namespace {GeneratedNameSpace}
                 void WriteInterceptors()
                 {
                     sb.Append(@"
-    file static class ").Append(info.Name).Append("_interceptors").Append(@"
+    file static class ").Append(info.Identifier).Append("_interceptors").Append(@"
     {");
                     foreach(var caller in callers)
                     {
@@ -112,7 +112,7 @@ namespace {GeneratedNameSpace}
                     sb.Append(@"
         public static IHttpClientBuilder AddMappedHttpClient(this IServiceCollection services, ").AppendConfigureArg().Append(@")
         {
-            return services.AddHttpClient<").Append(info.Name).Append(", ").Append(ClassName).Append(@">(client =>
+            return services.AddHttpClient<").Append(info.FullyQualifiedName).Append(", ").Append(ClassName).Append(@">(client =>
                 {
                     var res = new ").Append(ClassName).Append(@"(client, configure);
                     if(res.Options.").Append(nameof(ViaductClientOptions.BaseUrl)).Append(@" is not null and var BaseUrl)
@@ -194,7 +194,7 @@ namespace {GeneratedNameSpace}
                     foreach (var method in methods)
                     {
                         sb.Append($@"         
-         {(method.Info.IsAsync ? "async " : string.Empty)}{method.Info.ReturnType.FullName} {info.Name}.{method.Name}(")
+         {(method.Info.IsAsync ? "async " : string.Empty)}{method.Info.ReturnType.FullName} {info.FullyQualifiedName}.{method.Name}(")
                             .AppendArguments(method.Parameters).Append(@")
          {
             var url = ").Append(method.urlVariable).Append('(').AppendParameterNames(method.QueryParameters).Append(");");
