@@ -27,20 +27,34 @@ namespace Subro
                 => Options.TypeInfoResolver?.GetTypeInfo(type, options);
         }
 
+        static readonly ResolverRegistry Resolvers = new(CommonTypes.Default);
+
         public static readonly JsonSerializerOptions Options = new()
         {
-            TypeInfoResolver = CommonTypes.Default,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            TypeInfoResolver = Resolvers,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            Converters = { ConverterRegistry.Instance }
         };
 
         /// <summary>
         /// Adds the type resolver to the top of the type info resolver chain.
+        /// Can be called after <see cref="Options"/> has been used.
         /// </summary>
-        public static void AddContextToDefault(this IJsonTypeInfoResolver context)
+        public static void AddContextToDefault(this IJsonTypeInfoResolver context) => Resolvers.Insert(context);
+
+        /// <summary>
+        /// <see cref="Options"/> plus reflection-based type info, for types that none of the registered contexts contain.
+        /// </summary>
+#pragma warning disable IL2026, IL3050 //only used by the reflection fallbacks, which carry the same pragma
+        static JsonSerializerOptions ReflectionOptions => field ??= CreateReflectionOptions();
+#pragma warning restore IL2026, IL3050
+
+        [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("Reflection-based serialization")]
+        [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("Reflection-based serialization")]
+        static JsonSerializerOptions CreateReflectionOptions() => new(Options)
         {
-            // Insert, so newest contexts are checked first
-            Options.TypeInfoResolverChain.Insert(0, context);
-        }
+            TypeInfoResolver = JsonTypeInfoResolver.Combine(Resolvers, new DefaultJsonTypeInfoResolver())
+        };
 
 
         public static JsonTypeInfo<T>? GetTypeInfo<T>()
