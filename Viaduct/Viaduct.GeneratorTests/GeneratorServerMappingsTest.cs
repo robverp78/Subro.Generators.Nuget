@@ -1,4 +1,4 @@
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Subro.Generators.Tests;
 using System.Reflection;
@@ -84,6 +84,77 @@ namespace Viaduct.Tests
                     "JsonSourceGenerator type not found in assembly.");
 
             return (IIncrementalGenerator)Activator.CreateInstance(generatorType)!;
+        }
+
+        /// <summary>
+        /// An interface in the global namespace has no namespace to import, and the generator used to emit
+        /// the compiler's own spelling of it — <c>using &lt;global namespace&gt;;</c> — which does not parse.
+        /// The failure landed in generated code, where the error message points at nothing the author wrote.
+        /// </summary>
+        [Test]
+        public async Task InterfaceInGlobalNamespace_GeneratesCompilableCode()
+        {
+            var source = Usings + """
+
+                public interface IGlobalApi
+                {
+                    Task<string> GetThings();
+                }
+
+                class GlobalStartup
+                {
+                    void Configure()
+                    {
+                        ServerMappings.RegisterEndpoints<IGlobalApi>();
+                    }
+                }
+                """;
+
+            var compilation = RunFullPipeline(source);
+
+            var errors = compilation.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Error
+                && !d.ToString().Contains("Viaduct_AotTypes"))
+                .ToArray();
+
+            await Assert.That(errors).IsEmpty();
+        }
+
+        /// <summary>
+        /// The summary, description and operationId an endpoint carries into the OpenAPI document, taken from
+        /// the interface's own documentation so the two cannot drift apart.
+        /// </summary>
+        [Test]
+        public async Task GeneratedCodeCarriesEndpointDocumentation()
+        {
+            var source = Usings + """
+
+                namespace TestApp
+                {
+                    public interface IDocumentedApi
+                    {
+                        /// <summary>Lists the things.</summary>
+                        /// <remarks>All of them.</remarks>
+                        Task<string> GetThingsAsync();
+                    }
+
+                    class DocumentedStartup
+                    {
+                        void Configure()
+                        {
+                            ServerMappings.RegisterEndpoints<IDocumentedApi>();
+                        }
+                    }
+                }
+                """;
+
+            var result = RunGenerator(source);
+            var generatedCode = string.Join(Environment.NewLine, result.GeneratorResults.SelectMany(g => g.GeneratedTrees.Select(t => t.GetText().ToString())));
+
+            await Assert.That(generatedCode).Contains("WithSummary(\"Lists the things.\")");
+            await Assert.That(generatedCode).Contains("WithDescription(\"All of them.\")");
+            await Assert.That(generatedCode).Contains("WithName(\"DocumentedApi_GetThings\")");
+            await Assert.That(generatedCode).Contains("WithTags(\"DocumentedApi\")");
         }
 
         [Test]

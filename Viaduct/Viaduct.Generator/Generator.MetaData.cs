@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using static Viaduct.ViaductFunctions;
 
 namespace Viaduct.Generation
@@ -41,6 +43,78 @@ namespace Viaduct.Generation
 
             bool BasePathHasRouteParameters;
 
+            /// <summary>
+            /// The endpoint-name suffix per method name, or null for a method that cannot be given one. Worked
+            /// out for the interface as a whole, because a name is only usable if nothing else claims it.
+            /// </summary>
+            Dictionary<string, string?>? endpointNameSuffixes;
+
+            /// <summary>
+            /// What every generated endpoint name on this interface starts with: the interface name without its
+            /// leading I, and the type arguments for a closed generic, so two closures never share a name.
+            /// </summary>
+            readonly string namePrefix = BuildNamePrefix(type);
+
+            static string BuildNamePrefix(ITypeSymbol type)
+            {
+                var name = type.Name;
+                if (name.Length > 1 && name[0] == 'I' && char.IsUpper(name[1]))
+                    name = name.Substring(1);
+
+                if (type is INamedTypeSymbol { IsGenericType: true, TypeArguments.Length: > 0 } named)
+                    name += "_" + string.Join("_", named.TypeArguments.Select(static t => Sanitize(t.Name)));
+
+                return Sanitize(name);
+            }
+
+            /// <summary>
+            /// The endpoint name for a method, or null when it cannot be given one it would keep.
+            /// </summary>
+            string? GenerateEndpointName(IMethodSymbol method)
+                => endpointNameSuffixes!.TryGetValue(method.Name, out var suffix) && suffix is not null
+                    ? $"{namePrefix}_{Sanitize(suffix)}"
+                    : null;
+
+            /// <summary>
+            /// Works out what each method on the interface may call itself.
+            /// </summary>
+            /// <remarks>
+            /// "Async" is a convention of the C# method rather than part of the operation's name, so it is
+            /// dropped — but only while that leaves the methods distinguishable. An interface offering both
+            /// <c>Execute</c> and <c>ExecuteAsync</c> keeps both names in full, because dropping the suffix
+            /// would give two endpoints one name, and ASP.NET Core refuses to start with a duplicate.
+            /// <para>
+            /// Genuine overloads get no name at all: which of them a name refers to would be a guess, and an
+            /// operationId that silently moves to the other overload as the interface changes is worse for the
+            /// clients generated from it than having none.
+            /// </para>
+            /// </remarks>
+            static Dictionary<string, string?> BuildEndpointNameSuffixes(List<IMethodSymbol> methods)
+            {
+                var suffixes = new Dictionary<string, string?>(StringComparer.Ordinal);
+
+                foreach (var group in methods.GroupBy(static m => m.Name, StringComparer.Ordinal))
+                    suffixes[group.Key] = group.Count() > 1 ? null : StripAsync(group.Key);
+
+                // Two different methods whose names differ only by the suffix just dropped: give both back
+                // their full name rather than leaving them to collide.
+                var collisions = suffixes
+                    .Where(static entry => entry.Value is not null)
+                    .GroupBy(static entry => entry.Value!, StringComparer.Ordinal)
+                    .Where(static g => g.Count() > 1);
+
+                foreach (var collision in collisions)
+                    foreach (var entry in collision)
+                        suffixes[entry.Key] = entry.Key;
+
+                return suffixes;
+
+                static string StripAsync(string name)
+                    => name.Length > 5 && name.EndsWith("Async", StringComparison.Ordinal)
+                        ? name.Substring(0, name.Length - 5)
+                        : name;
+            }
+
 
         public void Create()
             {
@@ -54,7 +128,11 @@ namespace Viaduct.Generation
                 var methods = type.GetMembers().OfType<IMethodSymbol>()
                     .Concat(type.AllInterfaces.SelectMany(static i => i.GetMembers().OfType<IMethodSymbol>()))
                     .Where(m => m.MethodKind == MethodKind.Ordinary // Exclude property accessors and the likes
-                        && seen.Add(MethodSignatureKey(m)));
+                        && seen.Add(MethodSignatureKey(m)))
+                    .ToList();
+
+                // Up front, because what one method may call itself depends on what the others are called.
+                endpointNameSuffixes = BuildEndpointNameSuffixes(methods);
 
                 foreach (var method in methods)
                 {
@@ -83,7 +161,11 @@ namespace Viaduct.Generation
                 else
                 {
                     var methodArray = methodInfoList.ToImmutableArray();
-                    var ns = type.ContainingNamespace.ToDisplayString();
+                    // ToDisplayString() spells the global namespace as "<global namespace>", which is not a
+                    // name any generated `using` can carry. An interface declared there has no namespace at all.
+                    var ns = type.ContainingNamespace.IsGlobalNamespace
+                        ? string.Empty
+                        : type.ContainingNamespace.ToDisplayString();
 
                     // A closed (constructed) generic interface, e.g. ICrudGuid<AddressRecord>. Open generics
                     // (with unresolved type parameters) are never reached here because the registration call site
@@ -160,6 +242,8 @@ namespace Viaduct.Generation
                 var attInfo = ExtractInformationFromAttributes(method);
                 if (attInfo == null) return null;
                 var (httpMethod, routeTemplate, _, _) = attInfo.Value;
+
+                var documentation = GetEndpointDocumentation(method);
 
                 // If no HTTP method attribute found, determine from method name
                 if (string.IsNullOrEmpty(httpMethod))
@@ -270,7 +354,13 @@ namespace Viaduct.Generation
                     IsAsync ? ((INamedTypeSymbol)returnType).IsGenericType : returnType.SpecialType != SpecialType.System_Void,
                     innerType
                     )
-                {IgnoreForClientGeneration = attInfo.Value.IgnoreInClient, IgnoreForServerGeneration = attInfo.Value.IgnoreInServer };
+                {
+                    IgnoreForClientGeneration = attInfo.Value.IgnoreInClient,
+                    IgnoreForServerGeneration = attInfo.Value.IgnoreInServer,
+                    Summary = documentation.Summary,
+                    Description = documentation.Description,
+                    EndpointName = documentation.Name ?? GenerateEndpointName(method),
+                };
 
                 if (!IsAsync)
                 {
@@ -294,6 +384,138 @@ namespace Viaduct.Generation
 
                 return res; 
             }
+        }
+
+        /// <summary>
+        /// A method's endpoint documentation: what becomes summary, description and operationId in the
+        /// OpenAPI document.
+        /// </summary>
+        /// <remarks>
+        /// Attributes win over XML comments, so an endpoint can be worded differently from the method when the
+        /// two audiences need different words.
+        /// <para>
+        /// XML comments are only there to be read when the compiler can see them: source in this compilation,
+        /// or a referenced assembly shipped with its documentation file. Nothing breaks when they are missing —
+        /// the endpoint simply has no summary, exactly as before this existed.
+        /// </para>
+        /// </remarks>
+        static (string? Summary, string? Description, string? Name) GetEndpointDocumentation(IMethodSymbol method)
+        {
+            string? summary = null, description = null, name = null;
+
+            foreach (var attribute in method.GetAttributes())
+            {
+                var attributeName = attribute.AttributeClass?.Name;
+                if (attributeName is null
+                    || attribute.ConstructorArguments.Length == 0
+                    || attribute.ConstructorArguments[0].Value is not string value
+                    || value.Length == 0)
+                {
+                    continue;
+                }
+
+                switch (attributeName)
+                {
+                    case nameof(ViaductSummaryAttribute):
+                        summary = value;
+                        break;
+                    case nameof(ViaductDescriptionAttribute):
+                        description = value;
+                        break;
+                    case nameof(ViaductEndpointNameAttribute):
+                    // ASP.NET Core's own attributes, recognised by name so an interface project already using
+                    // them needs no second set. Matching the name rather than the type is what keeps
+                    // Viaduct.Core free of an ASP.NET reference.
+                    case "EndpointNameAttribute":
+                        name = value;
+                        break;
+                    case "EndpointSummaryAttribute":
+                        summary ??= value;
+                        break;
+                    case "EndpointDescriptionAttribute":
+                        description ??= value;
+                        break;
+                }
+            }
+
+            if (summary is null || description is null)
+            {
+                var (xmlSummary, xmlRemarks) = ReadXmlDocumentation(method);
+                summary ??= xmlSummary;
+                description ??= xmlRemarks;
+            }
+
+            return (summary, description, name);
+        }
+
+        /// <summary>Reads <c>&lt;summary&gt;</c> and <c>&lt;remarks&gt;</c> out of a method's documentation comment.</summary>
+        static (string? Summary, string? Remarks) ReadXmlDocumentation(IMethodSymbol method)
+        {
+            var xml = method.GetDocumentationCommentXml();
+
+            // Empty for a source symbol unless the project generates a documentation file: without /doc the
+            // compiler keeps the comments as plain trivia and never builds the XML. Reading the trivia is what
+            // makes this work in an ordinary project, which is nearly all of them.
+            if (string.IsNullOrWhiteSpace(xml))
+                xml = ReadDocumentationFromSource(method);
+
+            if (string.IsNullOrWhiteSpace(xml))
+                return (null, null);
+
+            try
+            {
+                var root = XElement.Parse(xml);
+                return (Text(root.Element("summary")), Text(root.Element("remarks")));
+            }
+            catch (XmlException)
+            {
+                // A malformed documentation comment is something the author sees in their own build. It is not
+                // a reason to fail code generation.
+                return (null, null);
+            }
+
+            // Documentation comments keep the line breaks and indentation of the source. Wherever this text is
+            // displayed it is a single run of prose, so it is collapsed to one line.
+            static string? Text(XElement? element)
+            {
+                if (element is null)
+                    return null;
+
+                var value = string.Join(" ", element.Value
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(static line => line.Trim())
+                    .Where(static line => line.Length > 0));
+
+                return value.Length == 0 ? null : value;
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds a method's documentation comment from the source it was declared in.
+        /// </summary>
+        /// <remarks>
+        /// Only reachable for an interface declared in this compilation. One in a referenced assembly has no
+        /// syntax here, and its documentation is only available when that assembly ships its XML file.
+        /// </remarks>
+        static string? ReadDocumentationFromSource(IMethodSymbol method)
+        {
+            var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            if (syntax is null)
+                return null;
+
+            var lines = syntax.GetLeadingTrivia().ToFullString()
+                .Split('\n')
+                .Select(static line => line.Trim())
+                .Where(static line => line.StartsWith("///", StringComparison.Ordinal))
+                .Select(static line => line.Substring(3))
+                .ToList();
+
+            if (lines.Count == 0)
+                return null;
+
+            // The comment's elements are siblings with no root of their own — the same shape
+            // GetDocumentationCommentXml wraps in <member>.
+            return "<member>" + string.Join("\n", lines) + "</member>";
         }
 
         static bool IsCancellationToken(this IParameterSymbol parameter)

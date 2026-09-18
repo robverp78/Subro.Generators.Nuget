@@ -26,6 +26,32 @@ namespace Viaduct.Server
         /// The default options used for mapping endpoints to interfaces. This can be changed to affect all mappings made after the change, but does not affect mappings that were already registered since options are cloned during registration. This allows for chaining of global settings.
         /// </summary>
         public static readonly ViaductServerOptions Default = new();
+
+        /// <summary>
+        /// Whether generated endpoints carry their documentation: the tag they are grouped under, and the
+        /// summary and description taken from the interface. Default <c>true</c>.
+        /// </summary>
+        /// <remarks>
+        /// This is what fills an OpenAPI document and everything generated from it. Turn it off only to keep
+        /// the document bare.
+        /// </remarks>
+        public bool IncludeEndpointMetadata { get; set; } = true;
+
+        /// <summary>
+        /// Whether generated endpoints get a name, which is also their OpenAPI <c>operationId</c>. Default
+        /// <c>true</c>.
+        /// </summary>
+        /// <remarks>
+        /// Names are generated as <c>{Interface}_{Method}</c> — <c>UserService_GetUser</c> — and a method can
+        /// set its own with <see cref="ViaductEndpointNameAttribute"/>. Overloads get none: which one a name
+        /// refers to would be a guess.
+        /// <para>
+        /// ASP.NET Core requires endpoint names to be unique across the whole application and throws at startup
+        /// when two collide. Viaduct sees one interface at a time, so two interfaces sharing a method name is
+        /// the case to watch: name one of them explicitly, or turn this off and lose the operationIds.
+        /// </para>
+        /// </remarks>
+        public bool GenerateEndpointNames { get; set; } = true;
     }
 
     /// <summary>

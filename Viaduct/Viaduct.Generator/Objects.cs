@@ -37,7 +37,8 @@ namespace Viaduct.Generation
 
         public override string ToString() => Name;
 
-        public readonly string FullName = $"{Namespace}.{Name}";
+        /// <summary>Empty <see cref="Namespace"/> means the interface is in the global namespace.</summary>
+        public readonly string FullName = string.IsNullOrEmpty(Namespace) ? Name : $"{Namespace}.{Name}";
 
         /// <summary>True when this metadata describes a closed (constructed) generic interface, e.g. <c>ICrudGuid&lt;AddressRecord&gt;</c>.</summary>
         public bool IsGeneric { get; init; }
@@ -92,6 +93,22 @@ namespace Viaduct.Generation
 
         public bool IgnoreForClientGeneration { get; init; } = false;
         public bool IgnoreForServerGeneration { get; init; } = false;
+
+        /// <summary>
+        /// One-line summary for the endpoint, from <c>[ViaductSummary]</c> or the method's XML
+        /// <c>&lt;summary&gt;</c> comment. Null when it has neither.
+        /// </summary>
+        public string? Summary { get; init; }
+
+        /// <summary>The longer description, from <c>[ViaductDescription]</c> or an XML <c>&lt;remarks&gt;</c> comment.</summary>
+        public string? Description { get; init; }
+
+        /// <summary>
+        /// The endpoint name, which becomes the OpenAPI <c>operationId</c>. Null for an overload, where any
+        /// generated name would be a guess at which of them is meant.
+        /// </summary>
+        public string? EndpointName { get; init; }
+
         public IEnumerable<ParameterCreationInfo> GetQueryParameters() => Parameters.Where(static p => p.QueryParameter);
     }
 

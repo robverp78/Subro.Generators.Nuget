@@ -56,11 +56,77 @@ namespace Viaduct.Generation
             };
         }        
 
+        /// <summary>
+        /// Emits the OpenAPI metadata for one endpoint: its tag, summary, description and name.
+        /// </summary>
+        /// <remarks>
+        /// Without this, an endpoint appears in the document as an untitled path with an empty operationId,
+        /// which is what a client generator turns into an unreadable method name. The text comes off the
+        /// interface — see <c>GetEndpointDocumentation</c> — so the API's documentation is the C# documentation
+        /// and cannot drift from it.
+        /// <para>
+        /// Both halves sit behind runtime options because neither is free of consequence: endpoint names have
+        /// to be unique across the whole application, and a project mapping two interfaces that happen to share
+        /// a method name would otherwise fail at startup.
+        /// </para>
+        /// </remarks>
+        static StringBuilder AppendEndpointMetadata(this StringBuilder sb, InterfaceMetaData info, MethodCreationInfo method)
+        {
+            sb.Append($@"
+                if(options.{ViaductServerOptionNames.IncludeEndpointMetadata})
+                {{
+                    endpoint.WithTags({Literal(GetTag(info))});");
+
+            if (method.Summary is not null)
+                sb.Append($@"
+                    endpoint.WithSummary({Literal(method.Summary)});");
+
+            if (method.Description is not null)
+                sb.Append($@"
+                    endpoint.WithDescription({Literal(method.Description)});");
+
+            sb.Append(@"
+                }");
+
+            if (method.EndpointName is not null)
+            {
+                sb.Append($@"
+                if(options.{ViaductServerOptionNames.GenerateEndpointNames})
+                    endpoint.WithName({Literal(method.EndpointName)});");
+            }
+
+            return sb;
+        }
+
+        /// <summary>The tag operations are grouped under in the document: the interface, without its leading I.</summary>
+        static string GetTag(InterfaceMetaData info)
+        {
+            var name = info.Name;
+            if (name.Length > 1 && name[0] == 'I' && char.IsUpper(name[1]))
+                name = name.Substring(1);
+
+            return info.TypeArgSegment is { Length: > 0 } segment ? $"{name} ({segment})" : name;
+        }
+
+        /// <summary>A C# string literal for <paramref name="value"/>, quoted and escaped.</summary>
+        static string Literal(string value) => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
+
+        /// <summary>
+        /// The names of the server options the generated code reads. Spelled once here because the generator
+        /// cannot reference Viaduct.Server to use <c>nameof</c>: that would put ASP.NET inside an analyzer.
+        /// </summary>
+        static class ViaductServerOptionNames
+        {
+            public const string IncludeEndpointMetadata = nameof(IncludeEndpointMetadata);
+            public const string GenerateEndpointNames = nameof(GenerateEndpointNames);
+        }
+
         const string mappingMethodName = "Map";
         public static string CreateServerMappingCode(InterfaceMetaData info, IEnumerable<MethodCallerInfo> callerMethods)
         {
             string className = $"{info.Identifier}_Viaduct_ServerMappings";
-            string Namespace = info.Namespace;
+            // An interface in the global namespace has nothing to import, and "using ;" does not compile.
+            string Namespace = string.IsNullOrEmpty(info.Namespace) ? string.Empty : $"using {info.Namespace};";
             var sb = new StringBuilder($$"""
 #nullable enable
 using Viaduct;
@@ -79,7 +145,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
-using {{Namespace}};
+{{Namespace}}
 
 
 {{interceptorAttribute}}
@@ -184,7 +250,7 @@ namespace {{GeneratedNameSpace}}
                 sb.Append($@"
             if(routeParams.Count > 0)
                 throw new ViaductException(""Route template for method '{method.Name}' contains parameters that cannot be found in the method signature. Parameters: "" + string.Join("", "", routeParams));
-            group.MapMethods(route, [""{method.HttpMethod}""], 
+            var endpoint = group.MapMethods(route, [""{method.HttpMethod}""], 
                 {(method.IsAsync ? "async " : "")}(");
                 for (int i = 0; i < method.Parameters.Length; i++)
                 {
@@ -218,6 +284,9 @@ namespace {{GeneratedNameSpace}}
 
                 sb.Append(@"                    
                     });
+");
+                sb.AppendEndpointMetadata(info, method);
+                sb.Append(@"
                 }
 ");
             } //end method loop

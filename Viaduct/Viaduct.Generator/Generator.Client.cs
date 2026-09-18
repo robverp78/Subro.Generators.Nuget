@@ -56,7 +56,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System;
-using ").Append(info.Namespace).Append(';').AppendLine()
+").Append(info.Namespace is { Length: > 0 } ns ? $"using {ns};" : string.Empty).AppendLine()
     .AppendLine(interceptorAttribute)
     .Append($@"
     

@@ -199,6 +199,15 @@ builder.Services.AddScopedAndMap<IUserService, UserService>(options =>
 });
 ```
 
+| Property | Default | Description |
+|---|---|---|
+| `IncludeEndpointMetadata` | `true` | Give each endpoint its tag, summary and description — see [API documentation](#api-documentation) |
+| `GenerateEndpointNames` | `true` | Give each endpoint a name, which is its OpenAPI `operationId` |
+
+Endpoint names must be unique across the whole application, and Viaduct only sees one interface at a time. Two
+interfaces declaring the same method name is the case to watch: ASP.NET Core throws at startup. Name one of
+them with `[ViaductEndpointName]`, or turn `GenerateEndpointNames` off and lose the operationIds.
+
 ### Client options
 
 ```csharp
@@ -221,6 +230,67 @@ builder.Services.CreateAndAddHttpClient<IUserService>(options =>
 | `[HttpMethodType(string method)]` | Method | Explicitly sets the HTTP method |
 | `[ViaductIgnore]` | Method | Skips the method for both server and client generation |
 | `[ViaductIgnoreForServer]` | Method | Generates a client proxy for the method but no server endpoint |
+| `[ViaductSummary(string text)]` | Method | The endpoint's one-line summary, when the XML `<summary>` will not do |
+| `[ViaductDescription(string text)]` | Method | The endpoint's longer description, when the XML `<remarks>` will not do |
+| `[ViaductEndpointName(string name)]` | Method | The endpoint name and OpenAPI `operationId`, replacing the generated one |
+
+---
+
+## API documentation
+
+Endpoints document themselves from the interface. A method's XML comment becomes the endpoint's summary and
+description, so the OpenAPI document says what the C# says and cannot drift from it:
+
+```csharp
+public interface IUserService
+{
+    /// <summary>The user with this id.</summary>
+    /// <remarks>Answers 404 when no such user exists.</remarks>
+    Task<User> GetUserAsync(int id, CancellationToken ct = default);
+}
+```
+
+Each endpoint also gets:
+
+- **A tag** — the interface name without its leading `I`, which is what groups operations in Swagger UI.
+- **An operationId**, generated as `{Interface}_{Method}` (`UserService_GetUser`). The trailing `Async` is
+  dropped, unless the interface has both `Execute` and `ExecuteAsync`, where both keep their full name.
+  Overloads get no name: which of them it would mean is a guess. Set one explicitly with
+  `[ViaductEndpointName]`.
+
+Attributes win over comments, so an endpoint can be worded for its own audience. `[EndpointSummary]`,
+`[EndpointDescription]` and `[EndpointName]` from ASP.NET Core are honoured too, if the interface project
+already uses them.
+
+> XML comments are read from source. An interface in a **referenced assembly** only carries them when that
+> project sets `<GenerateDocumentationFile>true</GenerateDocumentationFile>`; without it the endpoint simply
+> has no summary. The attributes always work.
+
+Both halves can be switched off per registration — see `IncludeEndpointMetadata` and `GenerateEndpointNames`
+under server options.
+
+---
+
+## Failed calls
+
+A client proxy throws `ViaductHttpException` when the server answers with a failure status. It carries the
+`StatusCode`, the `ResponseBody`, and the method and uri that were called, which is what lets a caller tell a
+permission decision from a missing record:
+
+```csharp
+try
+{
+    return await users.GetUserAsync(id, ct);
+}
+catch (ViaductHttpException ex) when (ex.StatusCode == 404)
+{
+    return null;
+}
+```
+
+It derives from `ViaductException`, so code catching that keeps working. A request that never reached the
+server, or an answer that could not be read, is a plain `ViaductException`: there is no status to report.
+A cancelled call throws `OperationCanceledException`, unwrapped.
 
 ---
 
