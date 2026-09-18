@@ -37,6 +37,9 @@ namespace Viaduct.Tests
         /// <summary>See above.</summary>
         Task<int> GetPair(CancellationToken ct = default);
 
+        /// <summary>Answers with the Authorization header the server saw, for the client tests.</summary>
+        Task<string> GetHeaderAsync(CancellationToken ct = default);
+
         /// <summary>An overload, so no endpoint name can be generated for either of these.</summary>
         Task<int> GetOverloadedAsync(int id, CancellationToken ct = default);
 
@@ -51,6 +54,7 @@ namespace Viaduct.Tests
         public Task<int> GetUndocumentedAsync(CancellationToken ct = default) => Task.FromResult(2);
         public Task<int> GetPairAsync(CancellationToken ct = default) => Task.FromResult(3);
         public Task<int> GetPair(CancellationToken ct = default) => Task.FromResult(4);
+        public Task<string> GetHeaderAsync(CancellationToken ct = default) => Task.FromResult(string.Empty);
         public Task<int> GetOverloadedAsync(int id, CancellationToken ct = default) => Task.FromResult(id);
         public Task<int> GetOverloadedAsync(string name, CancellationToken ct = default) => Task.FromResult(name.Length);
     }

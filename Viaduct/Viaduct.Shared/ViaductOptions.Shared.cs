@@ -36,8 +36,15 @@ namespace Viaduct
         }
 
         /// <summary>
-        /// Determines whether the client should include an authorization header in requests by default and if servers should add an authorization requirement to generated routes.
+        /// On the server, requires authorization on the generated endpoint group. On the client, sends an
+        /// access token with every call.
         /// </summary>
+        /// <remarks>
+        /// A client also needs somewhere to get that token: either
+        /// <c>ViaductClientOptions.GetAccessToken</c>, or an <c>IViaductAccessTokenProvider</c> registered in
+        /// the container. With neither, resolving the client throws rather than quietly sending unauthenticated
+        /// requests.
+        /// </remarks>
         public bool RequiresAuthorization { get; set; }
 
         /// <summary>

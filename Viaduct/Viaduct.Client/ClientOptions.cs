@@ -23,6 +23,25 @@ namespace Viaduct.Client
         /// </summary>
         public IJsonTypeInfoResolver? JsonTypeInfoResolver { get; set; }
 
+        /// <summary>
+        /// Supplies the access token for each request, when <see cref="ViaductOptions.RequiresAuthorization"/>
+        /// is set. Returning <c>null</c> means there is none — nobody has signed in yet — and the request goes
+        /// out unauthenticated for the server to refuse.
+        /// </summary>
+        /// <remarks>
+        /// Asked per request, so a refreshed token is used as soon as it exists. Where getting the token needs
+        /// services of its own, register an <see cref="IViaductAccessTokenProvider"/> instead: that is resolved
+        /// from the application's own container.
+        /// <para>
+        /// An <c>Authorization</c> header already on a request is never replaced.
+        /// </para>
+        /// </remarks>
+        public Func<System.Net.Http.HttpRequestMessage, System.Threading.CancellationToken, ValueTask<string?>>? GetAccessToken { get; set; }
+
+        /// <summary>
+        /// The scheme the token is sent under. <c>Bearer</c> unless something says otherwise.
+        /// </summary>
+        public string AuthorizationScheme { get; set; } = "Bearer";
 
         /// <summary>
         /// Default options for the client. Any Viaduct client action that uses options makes a copy of this Default.

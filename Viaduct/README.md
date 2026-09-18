@@ -271,6 +271,43 @@ under server options.
 
 ---
 
+## Authentication
+
+A client marked with `RequiresAuthorization` sends an access token on every call. Where the token needs
+nothing but a closure:
+
+```csharp
+builder.Services.CreateAndAddHttpClient<IUserService>(options =>
+{
+    options.BaseUrl = "https://api.example.com";
+    options.RequiresAuthorization = true;
+    options.GetAccessToken = (request, ct) => new ValueTask<string?>(tokenStore.Current);
+});
+```
+
+Where it comes from a service — the usual case in Blazor or MAUI, with a session that refreshes — register a
+provider instead, and leave the options alone:
+
+```csharp
+public sealed class SessionTokenProvider(IAuthSession session) : IViaductAccessTokenProvider
+{
+    public async ValueTask<string?> GetAccessTokenAsync(HttpRequestMessage request, CancellationToken ct)
+        => (await session.GetCurrentAsync(ct))?.AccessToken;
+}
+
+builder.Services.AddScoped<IViaductAccessTokenProvider, SessionTokenProvider>();
+```
+
+The token is asked for per request, so a refreshed one is used as soon as it exists. Returning `null` means
+nobody is signed in: the call goes out unauthenticated and the server answers, which surfaces as a
+`ViaductHttpException` with status 401 rather than a client-side error. The scheme is `Bearer` unless
+`AuthorizationScheme` says otherwise, and an `Authorization` header already on a request is never replaced.
+
+Requiring authorization with neither a `GetAccessToken` nor a registered provider throws when the client is
+resolved — a mistake that would otherwise show up as unexplained 401s.
+
+---
+
 ## Failed calls
 
 A client proxy throws `ViaductHttpException` when the server answers with a failure status. It carries the

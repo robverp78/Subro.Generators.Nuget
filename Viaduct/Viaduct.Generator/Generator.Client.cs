@@ -118,7 +118,7 @@ namespace {GeneratedNameSpace}
                     if(res.Options.").Append(nameof(ViaductClientOptions.BaseUrl)).Append(@" is not null and var BaseUrl)
                         client.BaseAddress = new Uri(BaseUrl);
                     return res;
-                });
+                }).AddViaductAuthorization(configure);
         }
     }");
                 }
