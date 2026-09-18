@@ -5,4 +5,43 @@
          Viaduct source generator to be recognised by the C# compiler. -->
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Viaduct.Generated</InterceptorsNamespaces>
   </PropertyGroup>
+
+  <!--
+    Hand the XML documentation of referenced assemblies to the Viaduct generator, so an interface that lives in
+    a contracts project of its own still documents its endpoints.
+
+    The compiler writes these files but never gives a generator the documentation of a reference, and an
+    analyzer may not read files itself (RS1035). AdditionalFiles is the supported route, but adding the .xml
+    files directly is not: every generator sees AdditionalFiles, and ASP.NET Core's own XML comment generator
+    takes any .xml among them as documentation to process — handed the framework's, it generates a file so
+    large the build fails on the metadata string limit.
+
+    So each one is copied next to the build output under an extension only this generator looks for. Framework
+    references are skipped, being both enormous and never where a service interface lives.
+  -->
+  <Target Name="ViaductAddReferenceDocumentation"
+          BeforeTargets="CoreCompile"
+          DependsOnTargets="ResolveAssemblyReferences"
+          Inputs="@(_ViaductReferenceDocumentationSource)"
+          Outputs="@(_ViaductReferenceDocumentationSource->'$(IntermediateOutputPath)viaduct/%(Filename).viaductdoc')">
+    <Copy SourceFiles="@(_ViaductReferenceDocumentationSource)"
+          DestinationFiles="@(_ViaductReferenceDocumentationSource->'$(IntermediateOutputPath)viaduct/%(Filename).viaductdoc')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
+    Collected outside the target as well, so the AdditionalFiles are known during evaluation of the compile
+    itself rather than only while the copy runs.
+  -->
+  <Target Name="ViaductCollectReferenceDocumentation"
+          BeforeTargets="ViaductAddReferenceDocumentation"
+          DependsOnTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <_ViaductCandidateDocumentation Include="@(ReferencePath->'%(RootDir)%(Directory)%(Filename).xml')"
+                                      Condition="'%(ReferencePath.FrameworkFile)' != 'true'" />
+      <_ViaductReferenceDocumentationSource Include="@(_ViaductCandidateDocumentation)" Condition="Exists('%(Identity)')" />
+      <AdditionalFiles Include="@(_ViaductReferenceDocumentationSource->'$(IntermediateOutputPath)viaduct/%(Filename).viaductdoc')" />
+    </ItemGroup>
+  </Target>
+
 </Project>

@@ -121,6 +121,55 @@ namespace Viaduct.Tests
         }
 
         /// <summary>
+        /// A compilation that does not compile must still not take the generator down with it.
+        /// </summary>
+        /// <remarks>
+        /// A registration whose types cannot be resolved is what every project looks like halfway through
+        /// being written, and what one looks like when it has an ordinary error elsewhere. The generator used
+        /// to return a <c>default</c> transform result there, whose diagnostics array is uninitialized, and the
+        /// incremental pipeline then threw <c>ArgumentNullException (Parameter 'many')</c> from inside Roslyn.
+        /// The build failed with that stack trace and nothing else — the real compile error never printed.
+        /// </remarks>
+        [Test]
+        public async Task BrokenCompilation_DoesNotCrashTheGenerator()
+        {
+            var source = Usings + """
+
+                namespace TestApp
+                {
+                    public interface IBrokenApi
+                    {
+                        Task<string> GetThings();
+                    }
+
+                    public class BrokenService : IBrokenApi
+                    {
+                        public Task<string> GetThings() => Task.FromResult(NoSuchType.Value);
+                    }
+
+                    class BrokenStartup
+                    {
+                        void Configure()
+                        {
+                            ServerMappings.RegisterEndpoints<IBrokenApi>();
+                        }
+                    }
+                }
+                """;
+
+            var compiler = createCompiler();
+            compiler.IncrementalGenerators.Add(new ViaductGenerator());
+
+            // The compilation is meant to be broken here, so the harness must not reject it for being so.
+            compiler.CheckErrors = false;
+
+            var compilation = compiler.Create(source);
+
+            // The compiler's own error is what the author needs to see, and it has to survive the generator.
+            await Assert.That(compilation.Diagnostics.Any(d => d.Id == "CS0103")).IsTrue();
+        }
+
+        /// <summary>
         /// The summary, description and operationId an endpoint carries into the OpenAPI document, taken from
         /// the interface's own documentation so the two cannot drift apart.
         /// </summary>

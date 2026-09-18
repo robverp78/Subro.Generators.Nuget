@@ -21,9 +21,9 @@ namespace Viaduct.Generation
         /// Generates <see cref="InterfaceMetaData"/> from the given interface type symbol, extracting method information and route templates based on attributes and conventions.
         /// </summary>        
         /// <returns></returns>
-        public static TransformResult< InterfaceMetaData> CreateInterfaceMetaData(ITypeSymbol type)
+        public static TransformResult< InterfaceMetaData> CreateInterfaceMetaData(ITypeSymbol type, Compilation? compilation = null)
         {
-            var builder = new InterfaceMetadataBuilder(type);
+            var builder = new InterfaceMetadataBuilder(type, compilation);
             try
             {
                 builder.Create();
@@ -36,9 +36,15 @@ namespace Viaduct.Generation
             }
         }
 
-        class InterfaceMetadataBuilder(ITypeSymbol type):TransformResultBuilder<InterfaceMetaData>
+        class InterfaceMetadataBuilder(ITypeSymbol type, Compilation? compilation = null):TransformResultBuilder<InterfaceMetaData>
         {
             readonly ITypeSymbol type = type;
+
+            /// <summary>
+            /// Needed to find a referenced assembly's documentation file; null only where a caller has no
+            /// compilation to give, which costs nothing but the documentation of interfaces declared elsewhere.
+            /// </summary>
+            readonly Compilation? compilation = compilation;
             readonly string? BasePath  = GetBasePath(type).CheckRoutePart();
 
             bool BasePathHasRouteParameters;
@@ -360,6 +366,9 @@ namespace Viaduct.Generation
                     Summary = documentation.Summary,
                     Description = documentation.Description,
                     EndpointName = documentation.Name ?? GenerateEndpointName(method),
+                    DocumentationId = documentation.Summary is null || documentation.Description is null
+                        ? method.GetDocumentationCommentId()
+                        : null,
                 };
 
                 if (!IsAsync)
@@ -459,9 +468,14 @@ namespace Viaduct.Generation
             if (string.IsNullOrWhiteSpace(xml))
                 xml = ReadDocumentationFromSource(method);
 
-            if (string.IsNullOrWhiteSpace(xml))
-                return (null, null);
+            // An interface from a referenced assembly has neither, and its documentation is filled in later
+            // from the additional files — see ReferenceDocumentation.
+            return xml is { Length: > 0 } ? ParseDocumentation(xml) : (null, null);
+        }
 
+        /// <summary>The summary and remarks in a <c>&lt;member&gt;</c> documentation element.</summary>
+        internal static (string? Summary, string? Remarks) ParseDocumentation(string xml)
+        {
             try
             {
                 var root = XElement.Parse(xml);
@@ -482,9 +496,7 @@ namespace Viaduct.Generation
                     return null;
 
                 var value = string.Join(" ", element.Value
-                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(static line => line.Trim())
-                    .Where(static line => line.Length > 0));
+                    .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
                 return value.Length == 0 ? null : value;
             }

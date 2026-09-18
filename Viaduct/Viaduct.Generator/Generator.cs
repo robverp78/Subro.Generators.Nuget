@@ -42,12 +42,22 @@ namespace Viaduct.Generation
             // Multiple call sites for the same interface (e.g. AddEndpoints + AddScopedAndMap)
             // should only generate one mapping file.
             var calledMethods = results.Select(static (p, _) => p.Method).Where(static m => m is not null).Collect();
-            context.RegisterSourceOutput(calledMethods, static (spc, infos) =>
+
+            // The XML documentation of referenced assemblies, handed to the generator as additional files by the
+            // props in Viaduct.Server and Viaduct.Client. See ReferenceDocumentation.
+            var referenceDocumentation = context.AdditionalTextsProvider
+                .Where(static file => file.Path.EndsWith(ViaductGeneratorFunctions.DocumentationFileExtension, StringComparison.OrdinalIgnoreCase))
+                .Collect()
+                .Select(static (files, ct) => ReferenceDocumentation.Create(files, ct));
+
+            context.RegisterSourceOutput(calledMethods.Combine(referenceDocumentation), static (spc, input) =>
             {
+                var (infos, documentation) = input;
+
                 foreach (var group in infos.GroupBy(info => new { info!.IsServerCall, info.InterfaceMetaData.FullyQualifiedName }))
                 {
                     MethodCallerInfo[] methods = [.. group!];
-                    var ifInfo = methods[0].InterfaceMetaData;
+                    var ifInfo = methods[0].InterfaceMetaData.WithDocumentation(documentation);
 
                     string generated, type;
                     if (group.Key.IsServerCall) //server
@@ -71,6 +81,13 @@ namespace Viaduct.Generation
 
     public static partial class ViaductGeneratorFunctions
     {
+        /// <summary>
+        /// The extension the build copies referenced XML documentation to. Not <c>.xml</c>: every generator is
+        /// handed the same AdditionalFiles, and ASP.NET Core's XML comment generator processes any .xml among
+        /// them — given the framework's documentation it generates a file large enough to fail the build.
+        /// </summary>
+        internal const string DocumentationFileExtension = ".viaductdoc";
+
         internal const string interceptorAttribute = """
             namespace System.Runtime.CompilerServices
             {

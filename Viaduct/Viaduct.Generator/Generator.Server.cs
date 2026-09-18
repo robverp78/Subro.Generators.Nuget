@@ -237,9 +237,12 @@ namespace {{GeneratedNameSpace}}
                 else if(routeParams.Count > 0)
                 {{");
 
+                    // The route's parameter names were lower-cased above when the option says so, and these
+                    // have to be compared in the same spelling or a {userId} in a predefined route matches
+                    // nothing and the mapping throws about a parameter that is right there in the signature.
                     foreach (var param in method.Parameters)
                         sb.Append($@"
-                    routeParams.Remove(""{param.Name}"");");
+                    routeParams.Remove(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)} ? ""{param.Name.ToLowerInvariant()}"" : ""{param.Name}"");");
                     //remove route parameters from template if not using route path parameters
                     sb.Append(@"
                 }

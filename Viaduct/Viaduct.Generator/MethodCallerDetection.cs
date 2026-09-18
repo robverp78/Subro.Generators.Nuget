@@ -14,6 +14,19 @@ namespace Viaduct.Generation
 {
     partial class ViaductGeneratorFunctions
     {
+        /// <summary>
+        /// "This invocation is not one of ours" — no result, and no diagnostics either.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately not <c>default</c>. A default <see cref="TransformResult{T}"/> leaves its diagnostics
+        /// array uninitialized, and the incremental pipeline throws
+        /// <c>ArgumentNullException (Parameter 'many')</c> the moment it collects one — from inside Roslyn, with
+        /// no mention of Viaduct or of the file involved. The compilation then fails with that and nothing else,
+        /// which is a very effective way to hide the real compile error that caused this path to be taken.
+        /// </remarks>
+        private static readonly TransformResult<CreationInfo> NotAViaductCall =
+            new(default, ImmutableArray<DiagnosticInfo>.Empty);
+
         // Method names that trigger client proxy generation
         private static readonly HashSet<string> ClientRegistrationNames =
         [
@@ -57,7 +70,7 @@ namespace Viaduct.Generation
         internal static TransformResult<CreationInfo> GetMethodCallInfo(GeneratorSyntaxContext context, CancellationToken ct)
         {        
             if (context.Node is not InvocationExpressionSyntax invocation)
-                return default;
+                return NotAViaductCall;
             try
             {                
                 return GetMethodCallInfo(invocation, context.SemanticModel, ct);
@@ -76,12 +89,12 @@ namespace Viaduct.Generation
             // Semantic model to verify it's actually a method
             if (semanticModel.GetSymbolInfo(invocation, ct).Symbol
                 is not IMethodSymbol methodSymbol)
-                return default;
+                return NotAViaductCall;
 
             // Get interceptable location - new Roslyn API replacing file/line/column
             var interceptableLocation = semanticModel.GetInterceptableLocation(invocation, ct);
             if (interceptableLocation is null)
-                return default;
+                return NotAViaductCall;
 
             // Determine server vs client
             var isServer = Server.Methods.ContainsKey(methodSymbol.Name);
@@ -89,7 +102,7 @@ namespace Viaduct.Generation
             var containingType = isServer ? "Server.ServerMappings" : "Client.ClientMappings";
             // Verify it's in your class
             if (!methodSymbol.ContainingType.ToDisplayString().StartsWith($"Viaduct.{containingType}"))
-                return default;
+                return NotAViaductCall;
 
             // Extract interface type from generic arguments.
             // For C# 14 extension members (e.g. AddScopedAndMap<TImplementation> inside extension<TInterface>),
@@ -101,10 +114,10 @@ namespace Viaduct.Generation
                 : methodSymbol.TypeArguments;
 
             if (typeArgs.Length == 0 || typeArgs[0] is not INamedTypeSymbol interfaceSymbol)
-                return default;
+                return NotAViaductCall;
 
-            var interfaceData = CreateInterfaceMetaData(interfaceSymbol);
-            if (interfaceData.IsEmpty) return default;
+            var interfaceData = CreateInterfaceMetaData(interfaceSymbol, semanticModel.Compilation);
+            if (interfaceData.IsEmpty) return NotAViaductCall;
 
             var res = new TransformResultBuilder<CreationInfo>();
             res.Diagnostics.AddRange(interfaceData.Diagnostics);

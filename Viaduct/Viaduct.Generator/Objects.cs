@@ -109,6 +109,13 @@ namespace Viaduct.Generation
         /// </summary>
         public string? EndpointName { get; init; }
 
+        /// <summary>
+        /// The method's documentation comment id, e.g. <c>M:MyApp.IUserService.GetUserAsync(System.Int32)</c>.
+        /// How a summary is found for an interface that lives in a referenced assembly, whose XML comments
+        /// reach the generator as an additional file rather than as syntax.
+        /// </summary>
+        public string? DocumentationId { get; init; }
+
         public IEnumerable<ParameterCreationInfo> GetQueryParameters() => Parameters.Where(static p => p.QueryParameter);
     }
 
