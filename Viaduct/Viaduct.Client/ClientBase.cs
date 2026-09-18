@@ -12,10 +12,8 @@ using Viaduct.Client.UrlBuilding;
 namespace Viaduct.Client
 {
     /// <summary>
-    /// The service callers inherit from this base class
-    /// </summary>
-    /// <summary>
-    /// Base class for generated HTTP client proxies.
+    /// Base class for the generated HTTP client proxies: what every generated client inherits, and where the
+    /// request building, sending and reading live.
     /// </summary>
     public partial class ViaductClientBase(HttpClient client, Action<ViaductClientOptions>? configure = null)
     {
@@ -31,12 +29,20 @@ namespace Viaduct.Client
         /// </remarks>
         public readonly ViaductClientOptions Options = configure.GetOptionsInstance();
 
+        /// <summary>
+        /// What one generated method needs to make its call: the route to build, and the verb to send.
+        /// </summary>
         protected partial record CallInfo(UrlBuildInfo UrlBuildInfo, HttpMethod HttpMethod);
 
 
+        /// <summary>The request for a call, before its body and headers are filled in.</summary>
         protected HttpRequestMessage CreateRequest(CallInfo info, string url)
             => new(info.HttpMethod, url);
 
+        /// <summary>
+        /// Serializes <paramref name="body"/> onto the request as JSON, through the source-generated type info
+        /// where there is any — which is what keeps a trimmed or AOT-published client working.
+        /// </summary>
         protected void SetBody<T>(HttpRequestMessage request, T body)
         {
             var info = GetJsonTypeInfo<T>();
@@ -131,6 +137,11 @@ namespace Viaduct.Client
                 uri);
         }
 
+        /// <summary>
+        /// The source-generated JSON contract for <typeparamref name="T"/>, or null when nothing registered
+        /// one. Null means reflection-based serialization, which is unavailable under AOT — hence the check
+        /// below in debug builds.
+        /// </summary>
         protected JsonTypeInfo<T>? GetJsonTypeInfo<T>()
         {
             var info = Options.GetJsonTypeInfo<T>();

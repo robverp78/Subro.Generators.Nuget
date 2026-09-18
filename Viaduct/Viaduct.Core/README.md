@@ -36,8 +36,12 @@ Define the interface **once** in a shared project. `Viaduct.Server` reads it and
 ## What's included
 
 - **Attributes**: `[BasePath]`, `[CustomRoute]`, `[HttpMethodType]`, `[ViaductIgnore]`, `[ViaductIgnoreForServer]`
+- **Documentation attributes**: `[ViaductSummary]`, `[ViaductDescription]`, `[ViaductEndpointName]` — what an
+  endpoint calls itself in the OpenAPI document, when its XML comments will not do
 - **Options**: `ViaductOptions` base record
-- **Exceptions**: `ViaductException`, `MissingRouteParameterException`
+- **Exceptions**: `ViaductException`, `ViaductHttpException`, `MissingRouteParameterException`
+- **The source generator**, which ships inside this package and reaches your project through
+  `Viaduct.Server` or `Viaduct.Client`
 
 ---
 

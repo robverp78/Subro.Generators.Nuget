@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -66,6 +66,9 @@ namespace Viaduct.Client
         }
     }
 
+    /// <summary>
+    /// Wires the access token onto a registered client.
+    /// </summary>
     public static class ViaductAuthorizationExtensions
     {
         /// <summary>

@@ -61,6 +61,24 @@ builder.Services.AddScopedAndMap<IUserService, UserService>(options =>
 
 ---
 
+## Endpoints document themselves
+
+A method's XML comment becomes its endpoint's summary and description, so the OpenAPI document says what the
+C# says:
+
+```csharp
+/// <summary>The user with this id.</summary>
+/// <remarks>Answers 404 when no such user exists.</remarks>
+Task<User> GetUserAsync(int id, CancellationToken ct = default);
+```
+
+Each endpoint is also tagged with the interface name and given an operationId of `{Interface}_{Method}` —
+`UserService_GetUser` — which is what client generators build their method names from. Override either with
+`[ViaductSummary]`, `[ViaductDescription]` and `[ViaductEndpointName]`, or turn them off per registration with
+`IncludeEndpointMetadata` and `GenerateEndpointNames`.
+
+---
+
 ## HTTP method inference
 
 | Method name starts with | HTTP method |

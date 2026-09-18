@@ -17,8 +17,17 @@ namespace Viaduct.Client
     {
 
 
+        /// <summary>
+        /// Resolves route parameters before anything else, including the values the generated proxy passes.
+        /// For a value that is the caller's to decide rather than the call's — a tenant or club id carried in
+        /// every path, say.
+        /// </summary>
         public ParameterResolverDelegate? OverridesParameterResolver { get; set; }
 
+        /// <summary>
+        /// Resolves route parameters the call itself did not supply. The last thing tried before
+        /// <see cref="MissingRouteParameterException"/> is thrown.
+        /// </summary>
         public ParameterResolverDelegate? DefaultParameterResolver { get; set; }
     }
 

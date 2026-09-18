@@ -50,12 +50,20 @@ namespace Viaduct.Client
         public static readonly ViaductClientOptions Default = new();
     }
 
+    /// <summary>
+    /// Helpers shared by the generated clients: JSON contracts, url building, and the extensions on
+    /// <see cref="ViaductClientOptions"/>.
+    /// </summary>
     partial class ViaductClientFunctions
     {
 
 
         extension(ViaductClientOptions options)
         {
+            /// <summary>
+            /// The JSON contract for <typeparamref name="T"/>: the resolver set on these options first, then
+            /// the ones registered globally.
+            /// </summary>
             public JsonTypeInfo<T>? GetJsonTypeInfo<T>()
             {
 

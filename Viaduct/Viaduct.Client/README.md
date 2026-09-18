@@ -66,9 +66,40 @@ builder.Services.CreateAndAddHttpClient<IUserService>(options =>
 
 ---
 
+## Authentication
+
+A client that requires authorization sends an access token with every call:
+
+```csharp
+builder.Services.CreateAndAddHttpClient<IUserService>(options =>
+{
+    options.BaseUrl = "https://api.example.com";
+    options.RequiresAuthorization = true;
+    options.GetAccessToken = (request, ct) => new ValueTask<string?>(tokenStore.Current);
+});
+```
+
+Where getting the token is itself a service call — a session that refreshes, in Blazor or MAUI — register an
+`IViaductAccessTokenProvider` instead and leave the options alone. Either way it is asked per request, so a
+refreshed token is used as soon as it exists. Returning `null` means nobody is signed in: the call goes out
+unauthenticated and the server answers.
+
+---
+
 ## Error handling
 
-Any non-2xx response throws a `ViaductException` wrapping the underlying `HttpRequestException`.
+A failure status throws `ViaductHttpException`, carrying the `StatusCode`, the `ResponseBody` and the request
+that was made:
+
+```csharp
+catch (ViaductHttpException ex) when (ex.StatusCode == 404)
+{
+    return null;
+}
+```
+
+It derives from `ViaductException`, which is still what a request that never got an answer throws. A cancelled
+call throws `OperationCanceledException`, unwrapped.
 
 ---
 
