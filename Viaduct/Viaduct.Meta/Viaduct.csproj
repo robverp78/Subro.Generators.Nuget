@@ -19,12 +19,16 @@
   </PropertyGroup>
 
   <!--
-    Both packages depend on Viaduct.Generator. NuGet resolves it to a single version,
-    so the generator runs exactly once even when both are referenced.
+    Both packages depend on Viaduct.Core, which carries the generator, so NuGet resolves it to a
+    single analyzer and it runs exactly once even though both are referenced.
+
+    PrivateAssets="none" is what makes this package work at all: everything a consumer needs from
+    the two packages — the generator, and the build props that opt the project into the interceptor
+    namespace — is exactly what NuGet keeps private by default one hop down.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\Viaduct\Viaduct.Server.csproj" />
-    <ProjectReference Include="..\Viaduct.Client\Viaduct.Client.csproj" />
+    <ProjectReference Include="..\Viaduct\Viaduct.Server.csproj" PrivateAssets="none" />
+    <ProjectReference Include="..\Viaduct.Client\Viaduct.Client.csproj" PrivateAssets="none" />
   </ItemGroup>
 
   <ItemGroup>

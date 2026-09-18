@@ -22,6 +22,50 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
+  <!--
+    The generator ships inside this package.
+
+    It has to travel with a package every consumer already has, and Viaduct.Core is the only one:
+    Viaduct.Server and Viaduct.Client both depend on it, so the analyzer is present exactly once
+    however they are combined. A copy in each of them instead would load the generator twice for a
+    project referencing both — the same types generated twice, which does not compile.
+
+    Packing the assembly rather than depending on the Viaduct.Generator package is also the only
+    option that works in CI: that package, at this version, is not on NuGet yet at the moment this
+    one is packed. It makes the versions impossible to mismatch as well.
+
+    The ProjectReference is what builds it; PrivateAssets keeps it out of the dependency list,
+    where a generator does not belong.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Viaduct.Generator\Viaduct.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ViaductGeneratorAssembly>..\Viaduct.Generator\bin\$(Configuration)\netstandard2.0\Viaduct.Generator.dll</ViaductGeneratorAssembly>
+  </PropertyGroup>
+
+  <!--
+    Only in the outer, framework-less evaluation — the one that writes the nuspec for a
+    multi-targeted project. An analyzer path carries no framework of its own, and adding the file
+    per framework would offer the same package path three times.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == ''">
+    <None Include="$(ViaductGeneratorAssembly)"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+  </ItemGroup>
+
+  <!-- A package that quietly lost its generator is what 0.1.1 was. Fail the pack instead. -->
+  <Target Name="ViaductVerifyGeneratorIsPacked" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('$(ViaductGeneratorAssembly)')"
+           Text="Viaduct.Generator.dll was not found at '$(ViaductGeneratorAssembly)'. Without it the package ships no generator, and every consumer fails at startup with ViaductMethodNotInterceptedException." />
+  </Target>
+
   <Import Project="..\Viaduct.Shared\Viaduct.Shared.projitems" Label="Shared" />
 
   <ItemGroup>

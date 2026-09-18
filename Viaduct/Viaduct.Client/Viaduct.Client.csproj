@@ -21,8 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="..\Viaduct.Generator\Viaduct.Generator.csproj"
                       OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" />
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" PrivateAssets="none" />
     <ProjectReference Include="..\..\Subro.Json\Subro.Json\Subro.Json.csproj" />
   </ItemGroup>
 

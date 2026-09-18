@@ -67,7 +67,7 @@ Referencing this package is equivalent to:
 <PackageReference Include="Viaduct.Client" Version="..." />
 ```
 
-The `Viaduct.Generator` source generator is a shared transitive dependency — it runs exactly once even when both are referenced.
+The source generator ships inside `Viaduct.Core`, which both packages depend on, so it runs exactly once even when both are referenced.
 
 ---
 

@@ -51,7 +51,9 @@ Viaduct generates all the server endpoint handlers and client HTTP calls at comp
 | [`Viaduct.Client`](https://www.nuget.org/packages/Viaduct.Client) | Your project calls the API as an HTTP client |
 | [`Viaduct`](https://www.nuget.org/packages/Viaduct) | Your project needs both (integration tests, monolith) |
 
-`Viaduct.Server` and `Viaduct.Client` each include the source generator as a transitive dependency — no separate generator package needed.
+The source generator ships inside `Viaduct.Core`, which `Viaduct.Server` and `Viaduct.Client` both depend on — no separate generator package to install, and exactly one generator however the packages are combined.
+
+> **0.1.1 is broken and should not be used.** Its packages carried no generator at all, so a project following this README compiled and then threw `ViaductMethodNotInterceptedException` at startup. Fixed in 0.1.2.
 
 ---
 

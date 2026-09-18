@@ -18,21 +18,24 @@
   </PropertyGroup>
 
   <!--
-    The generator is referenced as a ProjectReference here so that:
-      - Local development and debugging work exactly as before (ProjectReference semantics).
-      - When this project is packed, MSBuild translates it to a PackageReference in the
-        .nuspec automatically, using the same Version from Directory.Build.props.
-        Consumers therefore receive Viaduct.Generator as a transitive dependency without
-        any manual step.
+    The generator runs on this project through the ProjectReference below, and reaches consumers of
+    the package inside Viaduct.Core — see the comment there for why it travels with that package
+    rather than this one.
 
-    OutputItemType="Analyzer"        → the generator runs on projects that reference this package.
+    PrivateAssets="none" on Viaduct.Core is what lets it: NuGet keeps a dependency's analyzers and
+    build assets private by default, which would leave the generator sitting unused in the package
+    graph. Until 0.1.2 this reference was the way consumers were meant to get the generator, and
+    they never did — pack drops a ProjectReference that carries no compile-time output.
+
+    OutputItemType="Analyzer"        → the generator runs while building this project.
     ReferenceOutputAssembly="false"  → the generator DLL is not added to compilation references.
   -->
   <ItemGroup>
     <ProjectReference Include="..\Viaduct.Generator\Viaduct.Generator.csproj"
                       OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" />
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+    <ProjectReference Include="..\Viaduct.Core\Viaduct.Core.csproj" PrivateAssets="none" />
     <ProjectReference Include="..\..\Subro.Json\Subro.Json\Subro.Json.csproj" />
   </ItemGroup>
 
