@@ -39,6 +39,7 @@ a test environment can be found [here](https://robverp78.github.io/RecordForge/)
 - [Setters, abstract and partial](#setters-abstract-and-partial)
 - [Assembly level generation](#assembly-level-generation)
 - [Cross-assembly generation](#cross-assembly-generation)
+- [Completing an existing type](#completing-an-existing-type)
 - [FAQ](#faq)
 
 ---
@@ -334,6 +335,73 @@ The generator emits `Contracts.Person` (or wherever you point `NameSpace`) insid
 `MyApp.dll`.
 
 ---
+
+## Completing an existing type
+
+The attributes above all start from an interface and produce a *new* type. `[Implements]` goes the
+other way: the type already exists, you point it at an interface, and the generator adds only the
+properties the type does not already have.
+
+```csharp
+using Subro.RecordForge;
+
+public interface IAudited
+{
+    DateTimeOffset CreatedAt { get; init; }
+    DateTimeOffset UpdatedAt { get; set; }
+    string? CreatedBy { get; set; }
+}
+
+[Implements(typeof(IAudited))]
+public partial class Session
+{
+    // Written by hand, so the generator leaves it alone.
+    public DateTimeOffset UpdatedAt { get => updatedAt; set { updatedAt = value; MarkDirty(); } }
+    private DateTimeOffset updatedAt;
+}
+
+// --- generated ---
+// public partial class Session : global::IAudited
+// {
+//     public global::System.DateTimeOffset CreatedAt { get; init; }
+//     public string? CreatedBy { get; set; }
+// }
+```
+
+The type stays in charge. A member is left alone when it is declared in **any** partial part of the
+type, or inherited as a public/protected member from a base class. The interface itself is added to
+the base list of the generated part, so it does not have to be written at the declaration site.
+
+```csharp
+// Several interfaces, in one attribute or several — a member both interfaces ask for is generated once.
+[Implements(typeof(IAudited), typeof(ISoftDeletable))]
+[Implements(typeof(ITenantScoped), AlwaysCreateSetters = true)]
+public partial class Session;
+```
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `AlwaysCreateSetters` | `false` | Generate a setter even where the interface only asks for `{ get; }`. On a readonly struct it becomes an `init`. |
+| `DeclareInterface` | `true` | Add the interface to the base list of the generated part. Set to `false` when the type names the interface itself, or when you want the members without the interface. |
+
+Things worth knowing:
+
+- **The type (and every type it is nested in) must be `partial`** — otherwise `AIRIMPPART` is reported.
+- **Only properties are generated.** Methods, events and indexers are deliberately skipped, so a
+  missing implementation stays a compile error instead of becoming a runtime surprise. Default
+  interface implementations are skipped too, as they already have a body.
+- **Inherited interfaces are included**: `[Implements(typeof(ITracked))]` where `ITracked : IAudited`
+  fills in the members of both.
+- **A get-only interface member generates a get-only auto-property**, which only a constructor can
+  assign. Use `AlwaysCreateSetters` if you want it settable.
+- **Generators cannot see each other's output.** If another generator adds a member of the same name
+  to the same type, this one will not know about it and the two will collide.
+- **A name that is already taken is never overwritten**, even if the existing member cannot satisfy
+  the interface. That case reports `AIRIMPMISMATCH` so the compile error that follows is easier to
+  place.
+
+---
+
 
 ## FAQ
 
