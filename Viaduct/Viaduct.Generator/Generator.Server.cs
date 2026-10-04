@@ -197,16 +197,24 @@ namespace {{GeneratedNameSpace}}
 
                 sb.Append($@"
             {{ //{method.Name}                   
-                var route = ""{method.RouteTemplate}"";
-                var paramEnumerable = baseRouteParams.Concat(GetRouteParameters(route));
+                var route = {Literal(method.RouteTemplate)};
+                var methodRouteParams = GetRouteParameters(route).ToList();
+                var paramEnumerable = baseRouteParams.Concat(methodRouteParams);
                 if(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)})
                     paramEnumerable = paramEnumerable.Select(name=>name.ToLower());
                 var routeParams =  new HashSet<string>(paramEnumerable);
 ;");
-                if (method.Parameters.Length > 0) //add route path parameters if not predefined (in runtime depending on options)
+                if (method.Parameters.Length > 0)
                 {
-                    sb.Append($@"
-                if(options.{nameof(ViaductOptions.UseRoutePathParameters)})
+                    // Parameters the route does not name go in the path when the option says so — but not when the
+                    // method's own route names parameters: then that route is the method's whole path and the rest
+                    // are query parameters, whatever the option. The client (CreateRouteBuildInfo) decides the same
+                    // way, and the two have to agree or the client calls a path that is not mapped.
+                    var queryParameters = method.GetQueryParameters().ToArray();
+                    if (queryParameters.Length > 0)
+                    {
+                        sb.Append($@"
+                if(options.{nameof(ViaductOptions.UseRoutePathParameters)} && methodRouteParams.Count == 0)
                 {{
                     if(sbMethod == null)
                         sbMethod = new StringBuilder(route);
@@ -220,33 +228,26 @@ namespace {{GeneratedNameSpace}}
                     {{                        
                         if(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)})
                             parameterName = parameterName.ToLower();
-                        if(routeParams.Remove(parameterName)) return;  //parameter was defined in predefined route, do not add again
-                        sbMethod.Append(parameterName);
+                        if(routeParams.Contains(parameterName)) return;  //parameter was defined in predefined route, do not add again
+                        sbMethod.Append(""/{{"").Append(parameterName).Append('}}');
                     }}
 ");  //TODO: check cases like optional when adding route parameters
 
-                    foreach (var param in method.Parameters)
-                    {
-                        if (param.QueryParameter)
+                        foreach (var param in queryParameters)
                             sb.Append($@"                    
-                        AppendRouteParameter(""/{{{param.Name}}}"");"); 
-                    }
-                    sb.Append($@"                                
+                    AppendRouteParameter({Literal(param.Name)});");
+                        sb.Append(@"                                
                     route = sbMethod.ToString();
-                }}
-                else if(routeParams.Count > 0)
-                {{");
-
-                    // The route's parameter names were lower-cased above when the option says so, and these
-                    // have to be compared in the same spelling or a {userId} in a predefined route matches
-                    // nothing and the mapping throws about a parameter that is right there in the signature.
-                    foreach (var param in method.Parameters)
-                        sb.Append($@"
-                    routeParams.Remove(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)} ? ""{param.Name.ToLowerInvariant()}"" : ""{param.Name}"");");
-                    //remove route parameters from template if not using route path parameters
-                    sb.Append(@"
                 }
 ");
+                    }
+
+                    // Every parameter of the signature accounts for the route parameter of its name, which leaves
+                    // in routeParams only those the signature has nothing for. The route's names were lower-cased
+                    // above when the option says so, and these are compared in the same spelling.
+                    foreach (var param in method.Parameters)
+                        sb.Append($@"
+                routeParams.Remove(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)} ? {Literal(param.Name.ToLowerInvariant())} : {Literal(param.Name)});");
                 } //end of parameter loop
 
 
@@ -264,12 +265,12 @@ namespace {{GeneratedNameSpace}}
                 }
 
                 if (method.Parameters.Length > 0) sb.Append(", ");
-                sb.Append("[FromServices] ").Append(info.FullyQualifiedName).Append(@" service) => {");
+                sb.Append("[FromServices] ").Append(info.FullyQualifiedName).Append(@" __service) => {");
                 if (method.ReturnsValue)
                     sb.Append("return ");
                 if (method.IsAsync)
                     sb.Append("await ");
-                sb.Append("service.").Append(method.Name).Append('(');
+                sb.Append("__service.").Append(method.Name).Append('(');
                 for (int i = 0; i < method.Parameters.Length; i++)
                 {
                     var param = method.Parameters[i];

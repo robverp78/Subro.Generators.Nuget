@@ -165,9 +165,18 @@ public interface IUserService { ... }
 Task<User> FindByEmailAsync(string email);
 ```
 
+The client and the server both use this route. A route that names parameters is the method's whole path: the
+method's other simple parameters go in the query string, whatever `UseRoutePathParameters` says.
+
+```csharp
+[CustomRoute("/users/{userId}")]
+Task<User> GetUserAsync(Guid userId, string? include);
+// → GET /users/3f2c…?include=roles
+```
+
 ### Parameter binding
 
-- **Simple types** (`int`, `string`, `bool`, `DateTime`, etc.) become **route parameters** by default when `UseRoutePathParameters` is `true` (the default). For `GET` they are appended to the path; for other verbs they are query parameters or route segments.
+- **Simple types** (`int`, `string`, `bool`, `DateTime`, etc.) become **route segments** appended to the path when `UseRoutePathParameters` is `true` (the default), and **query parameters** when it is `false`, or when the method's route already names parameters of its own.
 - **Complex types** (classes, records) are bound from the **request body** (`[FromBody]`).
 - **`CancellationToken`** is always forwarded but never serialized.
 
@@ -184,7 +193,7 @@ All options are shared between server and client via `ViaductOptions`, with serv
 | `BasePath` | `null` | Prefix prepended to all routes |
 | `InterfaceBasePath` | `null` | Overrides the `[BasePath]` attribute on the interface |
 | `UseInterfaceNameForPath` | `false` | Auto-derive base path from the interface name (`IUserService` → `/UserService`) |
-| `UseRoutePathParameters` | `true` | Append simple parameters as route segments |
+| `UseRoutePathParameters` | `true` | Append simple parameters as route segments, unless the method's route names parameters itself |
 | `ForceLowerCaseRouteParameters` | `true` | Normalize parameter names to lowercase in URLs |
 | `RequiresAuthorization` | `false` | Call `RequireAuthorization()` on the endpoint group |
 

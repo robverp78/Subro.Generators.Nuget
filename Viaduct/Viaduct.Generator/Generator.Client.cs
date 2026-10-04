@@ -18,6 +18,9 @@ namespace Viaduct.Generation
     {
         public static partial class ClientGeneratorFunctions
         {
+            /// <summary>A C# string literal for <paramref name="value"/>, quoted and escaped.</summary>
+            static string Literal(string value) => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
+
             record MethodInfo(MethodCreationInfo Info, int Index)
             {
                 public readonly string urlVariable = $"{Info.Name}_UrlCreator_{Index}";
@@ -141,10 +144,11 @@ namespace {GeneratedNameSpace}
                 {
                     foreach (var method in methods)
                     {
-                        //route builder creation
+                        //route builder creation. The route template is the one the server maps (a [CustomRoute] or
+                        //the method name), so that both sides arrive at the same path.
                         sb.AppendLine().Append($$"""
             { //{{method.Name}}
-                var buildInfo = Options.CreateRouteBuildInfo({{BasePathVariable}},"{{method.Name}}",[
+                var buildInfo = Options.CreateRouteBuildInfo({{BasePathVariable}},{{Literal(method.Info.RouteTemplate)}},[
 """);
                         for (int i = 0; i < method.QueryParameters.Length; i++)
                         {
@@ -189,7 +193,9 @@ namespace {GeneratedNameSpace}
 
                 void writeInterfaceImplementations()
                 {
-                    //add interface implementation. Use explicit implementation to avoid possible naming conflicts 
+                    //add interface implementation. Use explicit implementation to avoid possible naming conflicts.
+                    //The locals are prefixed with __ because they share the method's scope with its parameters,
+                    //whose names are the interface's to choose: a parameter called request or url would not compile.
 
                     foreach (var method in methods)
                     {
@@ -197,25 +203,25 @@ namespace {GeneratedNameSpace}
          {(method.Info.IsAsync ? "async " : string.Empty)}{method.Info.ReturnType.FullName} {info.FullyQualifiedName}.{method.Name}(")
                             .AppendArguments(method.Parameters).Append(@")
          {
-            var url = ").Append(method.urlVariable).Append('(').AppendParameterNames(method.QueryParameters).Append(");");
+            var __url = ").Append(method.urlVariable).Append('(').AppendParameterNames(method.QueryParameters).Append(");");
                         sb.Append(@"
-            var info = ").Append(method.infoVariable).Append(';').Append(@"
-            var request = CreateRequest(info, url);");
+            var __info = ").Append(method.infoVariable).Append(';').Append(@"
+            var __request = CreateRequest(__info, __url);");
 
                         if(method.Info.Body is not null)
                         {
                             sb.Append($@"
             if({method.Info.Body.Name} != default)
-                SetBody(request, {method.Info.Body.Name});");
+                SetBody(__request, {method.Info.Body.Name});");
                         }
 
                         sb.Append(@"
-            var responseTask = SendAsync(request").AppendCancellationTokenArg(method).Append(").ConfigureAwait(false);").AppendLine();
+            var __responseTask = SendAsync(__request").AppendCancellationTokenArg(method).Append(").ConfigureAwait(false);").AppendLine();
 
                         if (method.Info.IsAsync)
                         {
                             sb.Append(@"
-            var response = await responseTask;
+            var __response = await __responseTask;
 ");
                         }
                         else
@@ -226,9 +232,9 @@ namespace {GeneratedNameSpace}
             #warning ").Append(ViaductErrors.NotAnAsyncMethod).Append(": Method ").Append(method.Name).Append(" on interface ").Append(info.Name).Append(" is not awaitable. Waiting for the I/O result might lead to deadlocks. Consider changing the method to Task or ValueTask");
                             if (method.Info.CancellationToken != null)
                                 sb.Append(@"
-            responseTask.Wait(").AppendCancellationTokenArg(method).Append(@");");
+            __responseTask.Wait(").AppendCancellationTokenArg(method).Append(@");");
                             sb.Append(@"
-            var response = responseTask.GetAwaiter().GetResult();");
+            var __response = __responseTask.GetAwaiter().GetResult();");
                             
                         }
 
@@ -242,7 +248,7 @@ namespace {GeneratedNameSpace}
 
                             sb.Append("ExtractResult<")
                                 .Append((mi.InnerReturnType ?? mi.ReturnType).FullName)
-                                .Append(">(response").AppendCancellationTokenArg(method);
+                                .Append(">(__response").AppendCancellationTokenArg(method);
                             if (mi.IsAsync) sb.AppendLine(");");
                             else sb.AppendLine(").GetAwaiter().GetResult();");
                         }
@@ -312,27 +318,29 @@ namespace {GeneratedNameSpace}
 
                 StringBuilder AppendAssignUrlFunctionWithParamResolver(MethodInfo method, bool ToLowerCase)
                 {
+                    //this.Options and the __ names: the enclosing lambda's parameters are the method's, and one called
+                    //Options or sb would otherwise be what these refer to.
                     sb.AppendAssignUrlFunction(method).Append(@"
-                        Options.ResolveMethodRoute(").AppendBuilderReference(method);
+                        this.Options.ResolveMethodRoute(").AppendBuilderReference(method);
 
                     if (method.QueryParameters.Length > 0)
                     {
-                        sb.Append(@", (sb,parName) =>
+                        sb.Append(@", (__sb,__parName) =>
                     {
-                        var res = parName switch {");
+                        var __res = __parName switch {");
                         foreach (var par in method.QueryParameters)
                         {
                             sb.Append(@"
                             """).Append(ToLowerCase ? par.Name.ToLower() : par.Name).Append("\" => ");
                             if (par.IsSimpleType)
-                                sb.Append("sb.Append(").Append(par.Name).Append("),");
+                                sb.Append("__sb.Append(").Append(par.Name).Append("),");
                             else
-                                sb.Append("sb.AppendRoutePart(").Append(par.Name).Append("),");
+                                sb.Append("__sb.AppendRoutePart(").Append(par.Name).Append("),");
                         }
                         sb.Append(@"
                            _ => null
                         };
-                        return res != null;
+                        return __res != null;
                     }");
                     }
                     return sb.Append(");");
