@@ -33,6 +33,8 @@ namespace Subro
         {
             TypeInfoResolver = Resolvers,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            //a type discriminator may come back anywhere in the object: Postgres jsonb, for one, does not keep property order
+            AllowOutOfOrderMetadataProperties = true,
             Converters = { ConverterRegistry.Instance }
         };
 
