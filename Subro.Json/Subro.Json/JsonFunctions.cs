@@ -33,8 +33,11 @@ namespace Subro
         {
             TypeInfoResolver = Resolvers,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+#if NET9_0_OR_GREATER
             //a type discriminator may come back anywhere in the object: Postgres jsonb, for one, does not keep property order
+            //(net8 has no such option, so there the discriminator must still come first)
             AllowOutOfOrderMetadataProperties = true,
+#endif
             Converters = { ConverterRegistry.Instance }
         };
 
