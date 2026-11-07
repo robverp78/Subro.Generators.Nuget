@@ -1,4 +1,4 @@
-﻿    using Microsoft.CodeAnalysis;
+    using Microsoft.CodeAnalysis;
     using Microsoft.CodeAnalysis.CSharp;
     using Microsoft.CodeAnalysis.CSharp.Syntax;
     using Microsoft.CodeAnalysis.Text;
@@ -45,22 +45,29 @@ namespace Subro.Generators
                 static (node, _) => true, //attribute has an interface target flag, so no extra checks needed
                 (context, token) => Transform(context, token));
 
-            context.RegisterSourceOutput(interfaceDeclarations, createRecord);
+            //what the consuming compilation can use is the same for every type, and changes only with its references and language version
+            var capabilities = context.CompilationProvider.Select(static (compilation, _) => ForgeCapabilities.From(compilation));
+
+            context.RegisterSourceOutput(interfaceDeclarations.Combine(capabilities), static (spc, pair) => createRecord(spc, pair.Left, pair.Right));
         }
 
 
-        static void createRecord(SourceProductionContext spc, CreationInfo info)
+        static void createRecord(SourceProductionContext spc, CreationInfo info, ForgeCapabilities capabilities)
         {
-            var code = BuildCode(info);
+            var code = BuildCode(info, capabilities);
             spc.AddSource($"{info.RecordNameSpace}.{info.RecordName}.g.cs", code);
         }
 
-        internal static string BuildCode(CreationInfo info)
+        internal static string BuildCode(CreationInfo info) => BuildCode(info, ForgeCapabilities.None);
+
+        internal static string BuildCode(CreationInfo info, ForgeCapabilities capabilities)
         {
+            bool describe = info.Settings.Metadata && capabilities.Fields;
+
             var sb = new StringBuilder();
 
-            // usings
-            sb.Append(@"
+            // usings; the interface's types are copied with their nullable annotations, which need an annotations context
+            sb.Append(@"#nullable enable annotations
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,11 +88,12 @@ using System.Threading.Tasks;
             if (info.IsReadOnly)
                 sb.Append("readonly ");
 
-            if (info.IsPartial)
-                sb.Append("partial ");
-
+            //'partial' has to come right before the type's keyword
             if (info.Settings.AsAbstract)
                 sb.Append("abstract ");
+
+            if (info.IsPartial)
+                sb.Append("partial ");
 
             sb.Append(info.TypeInfo.Keywords)
                 .Append(' ').Append(info.RecordName);
@@ -100,6 +108,7 @@ using System.Threading.Tasks;
                                                                         //Records and records structs already support primary ctors, so it is safe to assume they can be used.
             IReadOnlyList<PropertyCreationInfo>? primaryCtor;
             int startCtorIndex = 0;
+            bool hasParameterList = false;
             if (AllowPrimaryCtor)
             {
                 primaryCtor = ctors[startCtorIndex++];
@@ -108,14 +117,28 @@ using System.Threading.Tasks;
                 {
                     //add parameters for primary constructor
                     sb.AppendCtorParameters(primaryCtor);
+                    hasParameterList = true;
                 }
             }
             else primaryCtor = null;
 
             HashSet<string> primaryCtorNames = [.. primaryCtor?.Select(static p => p.Name) ?? []];
 
+            //base record, passed the parameters its primary constructor needs, which lead this record's
+            sb.Append(" : ");
+            if (info.BaseRecord is not null)
+            {
+                sb.Append(info.BaseRecord);
+                if (hasParameterList)
+                    sb.Append('(').Append(string.Join(", ", info.BasePrimaryConstructor)).Append(')');
+                sb.Append(", ");
+            }
+
             //interface and opening bracket for class
-            sb.Append(':').Append(info.InterfaceName).Append(@"
+            sb.Append(info.InterfaceName);
+            if (describe && capabilities.ForgedInterface)
+                sb.Append(", global::Subro.RecordForge.IForgedRecord<").Append(info.RecordName).Append('>');
+            sb.Append(@"
     {");
 
             //add additional constructors if needed
@@ -131,7 +154,6 @@ using System.Threading.Tasks;
                 {
                     sb.Append(@"
             : this(");
-                    sb.Append('(');
                     for (int pi = 0; pi < primaryCtor.Count; pi++)
                     {
                         if (pi > 0) sb.Append(", ");
@@ -159,6 +181,8 @@ using System.Threading.Tasks;
             //add properties
             foreach (var prop in info.Properties)
             {
+                if (prop.FromBase) continue; //the base record has it
+
                 bool isInPrimaryCtor = primaryCtorNames.Contains(prop.Name);
 
                 bool createSetter = prop.HasSetter || info.Settings.AlwaysCreateSetters;
@@ -197,11 +221,14 @@ using System.Threading.Tasks;
                     //but the property has a setter. Several choices here to have the user fix the construction, but chosen to
                     //silently make this work, by creating an implicit interface property
                     sb.AppendLine().AppendTabs().Append(prop.Type.FullName).Append(' ')
-                        .Append(info.InterfaceName).Append('.').Append(prop.Name).Append(" { get => this.").Append(prop.Name)
+                        .Append(prop.DeclaringInterface).Append('.').Append(prop.Name).Append(" { get => this.").Append(prop.Name)
                         .Append("; set => throw new NotSupportedException(\"This instance is read-only.\"); }");
                 }
             }
 
+
+            if (describe)
+                AppendMetadata(sb, info, capabilities);
 
             //end of class and namespace
             sb.Append(@"

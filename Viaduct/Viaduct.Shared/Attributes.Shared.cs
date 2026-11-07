@@ -115,4 +115,22 @@ namespace Viaduct
 
     }
 
+
+    /// <summary>
+    /// Gives every <c>const string</c> route template in a static partial class a link method: for
+    /// <c>public const string Club = "/app/clubs/{id:guid}";</c> the generator writes <c>ClubLink(Guid id)</c>, which fills in
+    /// the template. The constant itself stays what a page (<c>@attribute [Route(Pages.Club)]</c>) or an endpoint
+    /// (<c>app.MapGet(Pages.Club, ...)</c>) is registered with, so the route is written once.
+    /// </summary>
+    /// <remarks>
+    /// A parameter's type follows its constraint (<c>guid</c>, <c>int</c>, <c>long</c>, <c>bool</c>, <c>decimal</c>,
+    /// <c>double</c>, <c>float</c>, <c>datetime</c>), else it is a <c>string</c>. An optional parameter (<c>{page?}</c>, or one
+    /// with a default) may be null, which leaves it out. Values are written as the client's routes write them, and escaped.
+    /// The generated code needs nothing but the framework, so the class may live in a project that only shares definitions.
+    /// </remarks>
+    [AttributeUsage(AttributeTargets.Class)]
+    public class RouteTemplatesAttribute : ViaductAttributeBase
+    {
+    }
+
 }

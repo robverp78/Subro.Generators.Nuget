@@ -63,6 +63,15 @@ public abstract class GenerateRecordAttributeBase(RecordKind kind) : Attribute
     /// </remarks>
     public bool AlwaysCreateSetters { get; init; } = false;
 
+    public const bool DefaultMetadata = true;
+    /// <summary>
+    /// Whether the generated type describes itself (default true): a static <c>Fields</c> list with a
+    /// <see cref="RecordField"/> per property, carrying the attributes written on the interface's properties; a
+    /// <c>Projection</c> expression, <c>ProjectionFrom&lt;T&gt;()</c> and a <c>From</c> copy from anything implementing
+    /// the interface; and <c>IForgedRecord&lt;TSelf&gt;</c> where the target framework and language version allow it.
+    /// </summary>
+    public bool Metadata { get; init; } = DefaultMetadata;
+
     /// <summary>
     /// What kind of constructor(s) to create.
     /// Either <see cref="ConstructorUsage.Automatic"/> (default) or one

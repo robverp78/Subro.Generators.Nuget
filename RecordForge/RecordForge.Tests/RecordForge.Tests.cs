@@ -18,6 +18,10 @@ namespace Subro.Generators.Tests
             res.AdditionalReferences.Add(
                 Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(
                     typeof(GenerateRecordAttribute).Assembly.Location));
+            //the metadata uses expression trees; a real project references them with the framework, this one only what is loaded
+            res.AdditionalReferences.Add(
+                Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(
+                    typeof(System.Linq.Expressions.Expression).Assembly.Location));
             return res;
         }
 

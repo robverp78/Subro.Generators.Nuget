@@ -180,6 +180,28 @@ Task<User> GetUserAsync(Guid userId, string? include);
 - **Complex types** (classes, records) are bound from the **request body** (`[FromBody]`).
 - **`CancellationToken`** is always forwarded but never serialized.
 
+### Route templates for pages and links
+
+Routes that are not API methods, such as an application's pages, can be written once as constants and used everywhere:
+
+```csharp
+[RouteTemplates]                       // in a shared project; needs only Viaduct.Core
+public static partial class Pages
+{
+    public const string Club = "/app/clubs/{id:guid}";
+    public const string Season = "/app/clubs/{id:guid}/seasons/{year:int}";
+}
+
+// A Blazor page:   @attribute [Route(Pages.Club)]
+// An endpoint:     app.MapGet(Pages.Club, (Guid id) => ...);
+// A link:          Pages.ClubLink(club.Id), Pages.SeasonLink(club.Id, 2026)
+```
+
+The generator writes a `{Name}Link` method per `const string`: a parameter is typed by its constraint (`guid`, `int`, `long`,
+`bool`, `decimal`, `double`, `float`, `datetime`), else a `string`; optional ones (`{page?}`, `{page=1}`) may be null and are
+then left out. Values are formatted as the client formats route values, and escaped; a catch-all (`{*path}`) keeps its
+slashes. The generated code uses only the framework.
+
 ---
 
 ## Configuration
@@ -242,6 +264,7 @@ builder.Services.CreateAndAddHttpClient<IUserService>(options =>
 | `[ViaductSummary(string text)]` | Method | The endpoint's one-line summary, when the XML `<summary>` will not do |
 | `[ViaductDescription(string text)]` | Method | The endpoint's longer description, when the XML `<remarks>` will not do |
 | `[ViaductEndpointName(string name)]` | Method | The endpoint name and OpenAPI `operationId`, replacing the generated one |
+| `[RouteTemplates]` | Static partial class | A `{Name}Link(...)` method per `const string` route template in it |
 
 ---
 
@@ -378,6 +401,8 @@ The generator emits errors and warnings at compile time:
 | `VE301` | Warning | Parameter is in the route template but cannot be bound from a string |
 | `VE302` | Warning | Route template references a parameter not in the method signature |
 | `VE303` | Warning | No methods found on the interface |
+| `VE400` | Error | A class marked `[RouteTemplates]` is not a top-level static partial class |
+| `VE401` | Warning | A route constant's `{Name}Link` is already a member of the class, so no link is generated |
 
 ---
 

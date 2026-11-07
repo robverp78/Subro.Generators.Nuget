@@ -1,9 +1,10 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Subro.RecordForge;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Text;
 
 namespace Subro.Generators
@@ -11,36 +12,131 @@ namespace Subro.Generators
     partial class RecordForger
     {
 
-        static TransformResult<CreationInfo> Transform(INamedTypeSymbol InterfaceSymbol, GenerateTypeInfo info, AttributeData attributeData, CancellationToken token = default)
-        {
-            var props = ImmutableArray.CreateBuilder<PropertyCreationInfo>();
+        internal static readonly DiagnosticDescriptorInfo MetadataNameTaken =
+            Diagnostics.Warning("AIRMETANAME", "'{0}' has a property named '{1}', which the generated type's metadata uses; no metadata was generated. Set Metadata = false to silence this");
 
-            foreach (var member in InterfaceSymbol.GetMembers())
+        /// <summary>The static members the metadata adds, which a property of the interface must not be named.</summary>
+        static readonly string[] metadataMemberNames = ["Fields", "Projection", "ProjectionFrom", "From"];
+
+        static TransformResult<CreationInfo> Transform(INamedTypeSymbol InterfaceSymbol, GenerateTypeInfo info, AttributeData attributeData,
+            Compilation compilation, CancellationToken token = default)
+        {
+            var builder = new TransformResultBuilder<CreationInfo>();
+            builder.Result = Create(InterfaceSymbol, info, attributeData, compilation, builder, forBase: false, token);
+            return builder;
+        }
+
+        /// <summary>
+        /// What to generate for <paramref name="InterfaceSymbol"/>. For a base record (<paramref name="forBase"/>) only what a
+        /// derived record needs is worked out: its name, its properties and its primary constructor, not its attributes.
+        /// </summary>
+        static CreationInfo? Create(INamedTypeSymbol InterfaceSymbol, GenerateTypeInfo info, AttributeData attributeData,
+            Compilation compilation, TransformResultBuilder<CreationInfo> builder, bool forBase, CancellationToken token)
+        {
+            var settings = ReadSettings(attributeData, out var recName, out var recNameSpace);
+            string InterfaceNamespace = InterfaceSymbol.GetNamespace();
+            recName ??= InterfaceSymbol.Name.Substring(1);
+            recNameSpace ??= InterfaceNamespace;
+
+            //a record whose interface inherits one that has a record of its own derives from that record
+            CreationInfo? baseInfo = null;
+            if (info.KindValue == (int)RecordKind.Record)
+                foreach (var baseInterface in InterfaceSymbol.Interfaces)
+                {
+                    if (token.IsCancellationRequested) return null;
+                    if (GetGenerateRecordAttribute(baseInterface) is not { } baseAttribute) continue;
+
+                    var baseKind = GetGenerateTypeInfo(baseAttribute, 0);
+                    if (baseKind.KindValue != (int)RecordKind.Record) continue;
+
+                    baseInfo = Create(baseInterface, baseKind, baseAttribute, compilation, builder, forBase: true, token);
+                    if (baseInfo is not null) break;
+                }
+
+            var baseProperties = new Dictionary<string, PropertyCreationInfo>();
+            var baseCtor = new HashSet<string>();
+            if (baseInfo is not null)
             {
-                if (token.IsCancellationRequested) return default;
-                if (member is IPropertySymbol p && p.GetMethod is not null)
-                {
-                    props.Add(new(p));
-                }
-                else
-                {
-                    //interface  contains other symbols (methods) and/or properties without setters.
-                    //For now assume implementers will create their own if it is partial.
-                    //TODO: warning if not partial (generate a notimplementedException instead?)
-                }
+                foreach (var p in baseInfo.Properties) baseProperties[p.Name] = p;
+                foreach (var p in baseInfo.GetConstructors().First()) baseCtor.Add(p.Name);
             }
 
-            if (props.Count == 0) return
-                    Diagnostics.Warning("AIRNOPROPS", "{0} does not contain properties. No record was generated")
-                    .CreateDiagnosticInfo(null, InterfaceSymbol.Name);
+            bool describe = !forBase && settings.Metadata;
+            var props = ImmutableArray.CreateBuilder<PropertyCreationInfo>();
+            var declaringInterfaces = new List<INamedTypeSymbol>();
+            var claimed = new HashSet<string>();
 
+            foreach (var source in BaseFirst(InterfaceSymbol))
+            {
+                bool declares = false;
+                foreach (var member in source.GetMembers())
+                {
+                    if (token.IsCancellationRequested) return null;
 
-            if (token.IsCancellationRequested) return default;
+                    //interface contains other symbols (methods) and/or properties without getters.
+                    //For now assume implementers will create their own if it is partial.
+                    if (member is not IPropertySymbol p || p.GetMethod is null || p.IsStatic || p.IsIndexer || !claimed.Add(p.Name))
+                        continue;
+
+                    declares = true;
+                    baseProperties.TryGetValue(p.Name, out var fromBase);
+                    props.Add(new PropertyCreationInfo(p)
+                    {
+                        QualifiedType = p.Type.ToDisplayString(InterfaceImplementer.TypeFormat),
+                        DeclaringInterface = source.ToDisplayString(TypeOfFormat),
+                        AllowsNull = AllowsNull(p.Type),
+                        Attributes = describe ? WriteAttributes(p.GetAttributes(), compilation, token) : GeneratorFunctions.EmptyStrings,
+                        FromBase = fromBase is not null,
+                        BaseSettable = fromBase is not null && !baseCtor.Contains(p.Name)
+                            && (baseInfo!.CreatesSetter(fromBase) || fromBase.BaseSettable),
+                    });
+                }
+                if (declares) declaringInterfaces.Add(source);
+            }
+
+            if (props.Count == 0)
+            {
+                if (!forBase)
+                    builder.Diagnostics.Add(Diagnostics.Warning("AIRNOPROPS", "{0} does not contain properties. No record was generated")
+                        .CreateDiagnosticInfo(null, InterfaceSymbol.Name));
+                return null;
+            }
+
+            if (describe && props.FirstOrDefault(static p => Array.IndexOf(metadataMemberNames, p.Name) >= 0) is { } taken)
+            {
+                builder.Diagnostics.Add(MetadataNameTaken.CreateDiagnosticInfo(LocationInfo.From(attributeData, token), InterfaceSymbol.Name, taken.Name));
+                settings = settings with { Metadata = false };
+                describe = false;
+            }
+
+            return new CreationInfo(
+                info,
+                InterfaceSymbol.Name,
+                InterfaceNamespace,
+                recName,
+                recNameSpace,
+                props.ToEquatable(),
+                settings)
+            {
+                QualifiedInterface = InterfaceSymbol.ToDisplayString(TypeOfFormat),
+                InterfaceAccess = IsPublic(InterfaceSymbol) ? "public" : "internal",
+                BaseRecord = baseInfo is null ? null : QualifiedName(baseInfo.RecordNameSpace, baseInfo.RecordName),
+                BasePrimaryConstructor = baseInfo is null ? GeneratorFunctions.EmptyStrings
+                    : baseInfo.GetConstructors().First().Select(static p => p.Name).ToEquatable(),
+                BaseHasMetadata = baseInfo is not null && baseInfo.Settings.Metadata
+                    && !baseInfo.Properties.Any(static p => Array.IndexOf(metadataMemberNames, p.Name) >= 0),
+                InterfaceAttributes = describe
+                    ? declaringInterfaces.Select(i => new InterfaceAttributeInfo(i.ToDisplayString(TypeOfFormat), WriteAttributes(i.GetAttributes(), compilation, token))).ToEquatable()
+                    : new(ImmutableArray<InterfaceAttributeInfo>.Empty),
+            };
+        }
+
+        static CreationSettings ReadSettings(AttributeData attributeData, out string? recName, out string? recNameSpace)
+        {
             var settings = new CreationSettings();
-            string? recName = null, recNameSpace = null;
+            recName = recNameSpace = null;
 
-            var namedArgs = attributeData.NamedArguments;
-            foreach (var arg in namedArgs)
+            foreach (var arg in attributeData.NamedArguments)
                 switch (arg.Key)
                 {
                     case nameof(GenerateRecordAttribute.RecordName): recName = arg.Value.Value?.ToString(); break;
@@ -48,23 +144,61 @@ namespace Subro.Generators
                     case nameof(GenerateRecordAttribute.AsPartial):
                         settings = settings with { AsPartial = arg.Value.Value as bool? ?? GenerateRecordAttribute.DefaultAsPartial }; break;
                     case nameof(GenerateRecordAttribute.AsAbstract): settings = settings with { AsAbstract = arg.Value.Value as bool? ?? false }; break;
-                    case nameof(GenerateRecordAttribute.AlwaysCreateSetters): settings = settings with { AlwaysCreateSetters = arg.Value.Value as bool? ?? false } ;break;
+                    case nameof(GenerateRecordAttribute.AlwaysCreateSetters): settings = settings with { AlwaysCreateSetters = arg.Value.Value as bool? ?? false }; break;
                     case nameof(GenerateRecordAttribute.ConstructorUsage):
-                        settings = settings with {ConstructorUsage = (CtorUsage)(arg.Value.Value as int? ?? 0)}; break;
+                        settings = settings with { ConstructorUsage = (CtorUsage)(arg.Value.Value as int? ?? 0) }; break;
+                    case nameof(GenerateRecordAttribute.Metadata):
+                        settings = settings with { Metadata = arg.Value.Value as bool? ?? GenerateRecordAttribute.DefaultMetadata }; break;
                 }
 
-            string InterfaceNamespace = InterfaceSymbol.GetNamespace();
-
-            return new CreationInfo(
-                info,
-                InterfaceSymbol.Name,
-                InterfaceNamespace,
-                recName ?? InterfaceSymbol.Name.Substring(1),
-                recNameSpace ?? InterfaceNamespace,
-                props.ToEquatable(),
-                settings);
-        
+            return settings;
         }
+
+        /// <summary>The <see cref="GenerateRecordAttribute"/> on an interface, in this compilation or a referenced one.</summary>
+        static AttributeData? GetGenerateRecordAttribute(INamedTypeSymbol interfaceSymbol)
+        {
+            foreach (var attribute in interfaceSymbol.GetAttributes())
+                if (attribute.AttributeClass is { Name: nameof(GenerateRecordAttribute) } attributeClass
+                    && attributeClass.GetNamespace() == attributeNamespace)
+                    return attribute;
+            return null;
+        }
+
+        /// <summary>
+        /// The interface and everything it inherits, the deepest base first, each once: so a base interface's properties come
+        /// before the ones of the interfaces built on it, in the order they are declared.
+        /// </summary>
+        static List<INamedTypeSymbol> BaseFirst(INamedTypeSymbol interfaceSymbol)
+        {
+            var seen = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            var ordered = new List<INamedTypeSymbol>();
+            Visit(interfaceSymbol);
+            return ordered;
+
+            void Visit(INamedTypeSymbol current)
+            {
+                if (!seen.Add(current)) return;
+                foreach (var inherited in current.Interfaces) Visit(inherited);
+                ordered.Add(current);
+            }
+        }
+
+        static bool AllowsNull(ITypeSymbol type) =>
+            type.IsReferenceType
+                ? type.NullableAnnotation != NullableAnnotation.NotAnnotated
+                : type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+
+        /// <summary>Whether the type can be seen from outside its assembly: it and every type it is nested in are public.</summary>
+        static bool IsPublic(INamedTypeSymbol type)
+        {
+            for (INamedTypeSymbol? current = type; current is not null; current = current.ContainingType)
+                if (current.DeclaredAccessibility != Accessibility.Public)
+                    return false;
+            return true;
+        }
+
+        static string QualifiedName(string nameSpace, string name) =>
+            string.IsNullOrEmpty(nameSpace) ? "global::" + name : "global::" + nameSpace + "." + name;
 
         /// <summary>
         /// Used for <see cref="GenerateRecordFromInterfaceAttribute"/>, so assembly level
@@ -114,7 +248,7 @@ namespace Subro.Generators
                     foreach (var typeSymbol in validTypes)
                     {
                         if (token.IsCancellationRequested) yield break;
-                        yield return Transform(typeSymbol, info, attributeData, token);
+                        yield return Transform(typeSymbol, info, attributeData, context.SemanticModel.Compilation, token);
                     }
             }
         }
@@ -137,7 +271,7 @@ namespace Subro.Generators
                     && context.SemanticModel.GetDeclaredSymbol(interfaceNode) is INamedTypeSymbol InterfaceSymbol
                     )
                 {      
-                    yield return Transform(InterfaceSymbol, info, attributeData, token);
+                    yield return Transform(InterfaceSymbol, info, attributeData, context.SemanticModel.Compilation, token);
                 }
                 else
                 {

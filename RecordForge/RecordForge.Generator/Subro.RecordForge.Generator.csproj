@@ -121,9 +121,15 @@
 		<MSBuild Projects="..\RecordForge\Subro.RecordForge.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
 			<Output TaskParameter="TargetOutputs" ItemName="_RuntimeTargetOutput" />
 		</MSBuild>
+		<!-- The net8.0 build adds IForgedRecord<TSelf>, whose static abstract members netstandard2.0 cannot hold. -->
+		<MSBuild Projects="..\RecordForge\Subro.RecordForge.csproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=net8.0" />
+		<MSBuild Projects="..\RecordForge\Subro.RecordForge.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=net8.0">
+			<Output TaskParameter="TargetOutputs" ItemName="_RuntimeNet8TargetOutput" />
+		</MSBuild>
 		<ItemGroup>
 			<!-- Runtime library: consumers reference this directly. -->
 			<TfmSpecificPackageFile Include="@(_RuntimeTargetOutput)" PackagePath="lib/$(TargetFramework)/%(Filename)%(Extension)" />
+			<TfmSpecificPackageFile Include="@(_RuntimeNet8TargetOutput)" PackagePath="lib/net8.0/%(Filename)%(Extension)" />
 			<!-- Generator: loaded by Roslyn during consumer builds. -->
 			<TfmSpecificPackageFile Include="$(TargetPath)" PackagePath="analyzers/dotnet/cs/$(AssemblyName).dll" />
 		</ItemGroup>

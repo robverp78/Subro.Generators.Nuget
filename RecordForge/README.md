@@ -37,6 +37,8 @@ a test environment can be found [here](https://robverp78.github.io/RecordForge/)
 - [Naming and namespace overrides](#naming-and-namespace-overrides)
 - [Controlling constructors](#controlling-constructors)
 - [Setters, abstract and partial](#setters-abstract-and-partial)
+- [Interfaces that inherit](#interfaces-that-inherit)
+- [Metadata: fields and projections](#metadata-fields-and-projections)
 - [Assembly level generation](#assembly-level-generation)
 - [Cross-assembly generation](#cross-assembly-generation)
 - [Completing an existing type](#completing-an-existing-type)
@@ -282,6 +284,67 @@ public interface IUser
 - `AsAbstract` &mdash; emits the type as `abstract`. Useful for shared bases.
 - `AlwaysCreateSetters` &mdash; promote every `get`-only property to a settable one. On
   readonly kinds the setter becomes `init` to stay valid.
+- `Metadata` &mdash; default `true`; see [Metadata](#metadata-fields-and-projections).
+
+---
+
+## Interfaces that inherit
+
+The generated type has the properties of the interface **and of every interface it inherits**, the deepest base
+first. When a base interface has a `[GenerateRecord]` record of its own, the record of the derived interface
+**derives from that record**, passing the base's constructor parameters on:
+
+```csharp
+[GenerateRecord]
+public interface IClubCode { Guid Id { get; } string Code { get; } string? Name { get; set; } }
+
+[GenerateRecord]
+public interface IClubInfo : IClubCode { string? City { get; } }
+
+// --- generated (roughly) ---
+// public partial record ClubCode(Guid Id, string Code) : IClubCode { public string? Name { get; set; } }
+// public partial record ClubInfo(Guid Id, string Code, string? City) : ClubCode(Id, Code), IClubInfo;
+```
+
+So a `ClubInfo` goes wherever a `ClubCode` does, and code that takes the interface takes either. This works across
+assemblies too: the base interface's attribute says where its record is. Only `RecordKind.Record` derives (a struct
+cannot, and a class's constructors are not chained yet); other kinds simply get every property.
+
+---
+
+## Metadata: fields and projections
+
+Unless `Metadata = false`, a generated type describes itself, so that a library can find out what it holds without
+reflection, and select it from a query:
+
+```csharp
+[GenerateRecord]
+[Group("clubs")]
+public interface IClubCode
+{
+    [Search, Label("Code")] string Code { get; }
+    string? Name { get; set; }
+}
+
+ClubCode.Fields          // IReadOnlyList<RecordField>: Code, Name
+ClubCode.Projection      // Expression<Func<IClubCode, ClubCode>>: x => new ClubCode(x.Code) { Name = x.Name }
+ClubCode.ProjectionFrom<Club>()   // the same from a Club, for a query on Clubs
+ClubCode.From(club)      // a copy, in memory
+```
+
+- **`RecordField`** gives a property's `Name`, `Type`, `AllowsNull`, `HasSetter`, the `DeclaringInterface`, an
+  `Expression` reading it from that interface, `GetValue`, and **the attributes written on the interface's property, as
+  instances** (`GetAttribute<SearchAttribute>()`), plus the interface's own (`InterfaceAttributes`). RecordForge does not
+  know what an attribute means: a library reads its own. Compiler attributes, RecordForge's own, and attributes the
+  generated code cannot reach are left out.
+- **`RecordProjection.From(projection, typeof(Club))`** makes a projection start from another type that implements the
+  interface, such as an entity; `RecordProjection.For<Club, ClubCode>()` does it from the types. Query providers such as
+  Entity Framework translate the result to the entity's own columns. An abstract type has no projection.
+- **`IForgedRecord<TSelf>`** is implemented as well when the project targets .NET 7 or later with C# 11 or later, so
+  generic code reads `TRecord.Fields`, `TRecord.Interface` and `TRecord.Projection` from the type. The package ships a
+  `net8.0` build of its runtime beside the `netstandard2.0` one for this.
+- The members that name the interface are as public as the interface is. An interface with a property named `Fields`,
+  `Projection`, `ProjectionFrom` or `From` gets no metadata, with warning `AIRMETANAME`.
 
 ---
 

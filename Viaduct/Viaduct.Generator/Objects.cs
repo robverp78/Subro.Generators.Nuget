@@ -25,7 +25,11 @@ namespace Viaduct.Generation
         NotAnAsyncMethod = 300,
         ParameterIsNotSafeForRoute ,
         RouteParameterIsMissingInMethodSignature ,
-        NoMethodsFound
+        NoMethodsFound,
+
+        //[RouteTemplates]
+        RouteTemplatesNotStaticPartial = 400,
+        RouteLinkNameTaken,
     }
 
    

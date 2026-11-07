@@ -1,4 +1,5 @@
-﻿using Microsoft.CodeAnalysis;
+using System.Collections.Immutable;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Subro.RecordForge;
@@ -62,7 +63,27 @@ namespace Subro.Generators
         public bool AlwaysCreateSetters { get; init; }
 
         public CtorUsage ConstructorUsage { get; init; }
+
+        public bool Metadata { get; init; } = GenerateRecordAttribute.DefaultMetadata;
     }
+
+    /// <summary>
+    /// What the consuming compilation allows the generated code to use: <see cref="RecordField"/> (any version of the
+    /// runtime that has it), and <c>IForgedRecord&lt;TSelf&gt;</c> (the runtime's net8.0 build, with C# 11 or later for its
+    /// static abstract members).
+    /// </summary>
+    internal readonly record struct ForgeCapabilities(bool Fields, bool ForgedInterface)
+    {
+        public static ForgeCapabilities None => default;
+
+        public static ForgeCapabilities From(Compilation compilation) => new(
+            compilation.GetTypeByMetadataName("Subro.RecordForge.RecordField") is not null,
+            compilation.GetTypeByMetadataName("Subro.RecordForge.IForgedRecord`1") is not null
+                && compilation is CSharpCompilation { LanguageVersion: >= LanguageVersion.CSharp11 });
+    }
+
+    /// <summary>The attributes on an interface, as code creating them, for <see cref="RecordField.InterfaceAttributes"/>.</summary>
+    internal sealed record InterfaceAttributeInfo(string Interface, EquatableArray<string> Attributes);
 
     [Flags]
     enum CtorUsage
@@ -83,6 +104,27 @@ namespace Subro.Generators
         EquatableArray<PropertyCreationInfo> Properties,
         CreationSettings Settings)
     {
+        /// <summary>The interface, fully qualified, for code that does not rely on the usings.</summary>
+        public string QualifiedInterface { get; init; } = InterfaceName;
+
+        /// <summary>The record generated for a base interface that this one derives from, fully qualified; null for none.</summary>
+        public string? BaseRecord { get; init; }
+
+        /// <summary>The parameters of <see cref="BaseRecord"/>'s primary constructor, in order: this record's come first.</summary>
+        public EquatableArray<string> BasePrimaryConstructor { get; init; } = GeneratorFunctions.EmptyStrings;
+
+        /// <summary>
+        /// How the metadata members that name the interface are declared: <c>public</c>, or <c>internal</c> for an interface
+        /// that is not public, which a public member cannot expose.
+        /// </summary>
+        public string InterfaceAccess { get; init; } = "public";
+
+        /// <summary>Whether <see cref="BaseRecord"/> describes itself, so this record's static members hide its.</summary>
+        public bool BaseHasMetadata { get; init; }
+
+        /// <summary>The attributes of each interface that declares a property, for the metadata.</summary>
+        public EquatableArray<InterfaceAttributeInfo> InterfaceAttributes { get; init; } = new(ImmutableArray<InterfaceAttributeInfo>.Empty);
+
         /*
          * In loving memory of Smokey. 
          * Smokes, you were such an awesome kitty cat. You were my buddy.
@@ -118,18 +160,31 @@ namespace Subro.Generators
             }
         }
 
+        /// <summary>
+        /// The parameters of each constructor. A record deriving from <see cref="BaseRecord"/> starts every one with the base
+        /// record's primary constructor's, which it has to pass on; the properties the base record has are not its own.
+        /// </summary>
         public IEnumerable<IReadOnlyList<PropertyCreationInfo>> GetConstructors()
         {
+            var basePrimary = BasePrimaryConstructor.Select(name => Properties.First(p => p.Name == name)).ToList();
+            var own = Properties.Where(static p => !p.FromBase);
+
             foreach (var ctor in GetConstructorTypes())
                 yield return ctor switch
                 {
-                    CtorUsage.Empty => [],
-                    CtorUsage.ReadonlyProperties => [.. Properties.Where(static p => !p.HasSetter)],
-                    CtorUsage.ReadonlyAndInitProperties => [.. Properties.Where(static p => p.HasInit || !p.HasSetter)],
-                    CtorUsage.AllProperties => Properties,
+                    CtorUsage.Empty => basePrimary,
+                    CtorUsage.ReadonlyProperties => [.. basePrimary, .. own.Where(static p => !p.HasSetter)],
+                    CtorUsage.ReadonlyAndInitProperties => [.. basePrimary, .. own.Where(static p => p.HasInit || !p.HasSetter)],
+                    CtorUsage.AllProperties => [.. basePrimary, .. own],
                     _ => throw new InvalidOperationException("Invalid constructor usage")
                 };
         }
+
+        /// <summary>Whether this type's own declaration of <paramref name="property"/> has a setter or init.</summary>
+        public bool CreatesSetter(PropertyCreationInfo property) => property.HasSetter || Settings.AlwaysCreateSetters;
+
+        /// <summary>Whether the type has a constructor and so can be made: not abstract.</summary>
+        public bool CanCreate => !Settings.AsAbstract;
 
         public bool IsReadOnly => TypeInfo.IsReadOnly;
         public bool IsPartial => Settings.AsPartial;
@@ -143,6 +198,23 @@ namespace Subro.Generators
         }
 
         public readonly bool HasInit;
+
+        /// <summary>The type, fully qualified, with its nullable annotation.</summary>
+        public string QualifiedType { get; init; } = "";
+
+        /// <summary>The interface that declares the property, fully qualified.</summary>
+        public string DeclaringInterface { get; init; } = "";
+
+        public bool AllowsNull { get; init; }
+
+        /// <summary>The attributes on the interface's property, as code creating them.</summary>
+        public EquatableArray<string> Attributes { get; init; } = GeneratorFunctions.EmptyStrings;
+
+        /// <summary>Provided by the base record rather than declared by this type.</summary>
+        public bool FromBase { get; init; }
+
+        /// <summary>For a property from the base record: whether it can be set after construction (set or init).</summary>
+        public bool BaseSettable { get; init; }
 
     }
 }
