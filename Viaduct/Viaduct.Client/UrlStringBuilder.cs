@@ -3,6 +3,7 @@ using Microsoft.VisualBasic;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -41,7 +42,7 @@ namespace Viaduct.Client
             /// <returns>The same <see cref="StringBuilder"/> for chaining.</returns>
             /// <remarks>Format: ISO 8601 date only, e.g. <c>2024-03-15</c></remarks>
             public StringBuilder AppendRoutePart(DateOnly value) =>
-                sb.Append(value.ToString("yyyy-MM-dd"));
+                sb.Append(value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
 
             /// <summary>
             /// Appends a <see cref="DateTime"/> value to the route.
@@ -49,7 +50,7 @@ namespace Viaduct.Client
             /// <returns>The same <see cref="StringBuilder"/> for chaining.</returns>
             /// <remarks>Format: ISO 8601 datetime with UTC, e.g. <c>2024-03-15T10:30:00Z</c></remarks>
             public StringBuilder AppendRoutePart(DateTime value) =>
-                sb.Append(value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"));
+                sb.Append(value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture));
 
             /// <summary>
             /// Appends a <see cref="DateTimeOffset"/> value to the route.
@@ -57,7 +58,7 @@ namespace Viaduct.Client
             /// <returns>The same <see cref="StringBuilder"/> for chaining.</returns>
             /// <remarks>Format: ISO 8601 datetime with offset, e.g. <c>2024-03-15T10:30:00%2B01%3A00</c> (URL-escaped)</remarks>
             public StringBuilder AppendRoutePart(DateTimeOffset value) =>
-                sb.Append(Uri.EscapeDataString(value.ToString("yyyy-MM-ddTHH:mm:sszzz")));
+                sb.Append(Uri.EscapeDataString(value.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture)));
 
             /// <summary>
             /// Appends a <see cref="TimeOnly"/> value to the route.
@@ -65,7 +66,7 @@ namespace Viaduct.Client
             /// <returns>The same <see cref="StringBuilder"/> for chaining.</returns>
             /// <remarks>Format: ISO 8601 time only, e.g. <c>10:30:00</c></remarks>
             public StringBuilder AppendRoutePart(TimeOnly value) =>
-                sb.Append(value.ToString("HH:mm:ss"));
+                sb.Append(value.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
 
             /// <summary>
             /// Appends a <see cref="TimeSpan"/> value to the route.
@@ -162,8 +163,14 @@ namespace Viaduct.Client.UrlBuilding
                         foreach (var parName in parameters)
                             Appenders.Add((sb, pars) =>
                             {
+                                // A value that writes nothing (a null) leaves no empty segment: the server maps a parameter
+                                // that may be left out as an optional one.
+                                var length = sb.Length;
                                 if (sb.Length == 0 || sb[^1] != '/') sb.Append('/');
+                                var written = sb.Length;
                                 pars(sb, parName);
+                                if (sb.Length == written)
+                                    sb.Length = length;
                             });
                     }
                     else

@@ -105,6 +105,25 @@ namespace System.Diagnostics.CodeAnalysis
 }
 #endif
 
+#if !NET8_0_OR_GREATER
+namespace System.Runtime.CompilerServices
+{
+    // Required for collection expressions of a type of one's own ([CollectionBuilder] on EquatableArray<T>)
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, Inherited = false)]
+    internal sealed class CollectionBuilderAttribute : Attribute
+    {
+        public CollectionBuilderAttribute(Type builderType, string methodName)
+        {
+            BuilderType = builderType;
+            MethodName = methodName;
+        }
+
+        public Type BuilderType { get; }
+        public string MethodName { get; }
+    }
+}
+#endif
+
 #if NETSTANDARD2_0
 internal struct HashCode
 {

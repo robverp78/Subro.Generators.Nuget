@@ -15,19 +15,35 @@ namespace Viaduct.Client
     /// Base class for the generated HTTP client proxies: what every generated client inherits, and where the
     /// request building, sending and reading live.
     /// </summary>
-    public partial class ViaductClientBase(HttpClient client, Action<ViaductClientOptions>? configure = null)
+    public partial class ViaductClientBase
     {
+        /// <summary>A client with options of its own, made from <paramref name="configure"/>.</summary>
+        public ViaductClientBase(HttpClient client, Action<ViaductClientOptions>? configure = null)
+            : this(client, configure.GetOptionsInstance())
+        {
+        }
+
+        /// <summary>
+        /// A client on options made once for its registration and shared by every client made from it: a typed client is
+        /// made for every injection, and this keeps that cheap.
+        /// </summary>
+        public ViaductClientBase(HttpClient client, ViaductClientOptions options)
+        {
+            Client = client;
+            Options = options;
+        }
+
         /// <summary>
         /// The HTTP client used for making requests.
         /// </summary>
-        protected readonly HttpClient Client = client;
+        protected readonly HttpClient Client;
         /// <summary>
         /// The options with which the client was created
         /// </summary>
         /// <remarks>
         /// The class is initialized during creation and is meant as readonly after that. Changing values of these options will NOT alter behaviour.
         /// </remarks>
-        public readonly ViaductClientOptions Options = configure.GetOptionsInstance();
+        public readonly ViaductClientOptions Options;
 
         /// <summary>
         /// What one generated method needs to make its call: the route to build, and the verb to send.
@@ -39,26 +55,16 @@ namespace Viaduct.Client
         protected HttpRequestMessage CreateRequest(CallInfo info, string url)
             => new(info.HttpMethod, url);
 
+        /// <summary>The request for a call, before its body and headers are filled in.</summary>
+        protected HttpRequestMessage CreateRequest(HttpMethod method, string url)
+            => new(method, url);
+
         /// <summary>
-        /// Serializes <paramref name="body"/> onto the request as JSON, through the source-generated type info
-        /// where there is any — which is what keeps a trimmed or AOT-published client working.
+        /// Serializes <paramref name="body"/> onto the request as JSON, with the contract <see cref="GetJsonTypeInfo{T}"/>
+        /// gives: the server reads it with the same.
         /// </summary>
         protected void SetBody<T>(HttpRequestMessage request, T body)
-        {
-            var info = GetJsonTypeInfo<T>();
-            JsonContent content;
-            if (info is null)
-#pragma warning disable IL2026, IL3050
-                // until JsonSerializerContext support is added, attempt to deserialize without type info for non-AOT environments
-                //Hopefully in the future it is possible to provide generator order, or another way to emulate the same as JsonSerializable from within the code
-                //For now it is accepted that a user can use IL instead, even though the goal is to create AOT code
-                content = JsonContent.Create(body);
-#pragma warning restore IL2026, IL3050
-            else
-                content = JsonContent.Create(body, info);
-
-            request.Content = content;
-        }
+            => request.Content = JsonContent.Create(body, GetJsonTypeInfo<T>());
 
         /// <summary>
         /// The most of a failure response kept in <see cref="ViaductHttpException.ResponseBody"/>. Enough for
@@ -68,7 +74,8 @@ namespace Viaduct.Client
         private const int MaxErrorBodyLength = 4096;
 
         /// <summary>
-        /// Sends the request and returns the response, or throws.
+        /// Sends the request and returns the response, or throws. The response is handed back once its headers are in,
+        /// so its JSON is read from the stream rather than buffered first; the caller disposes it.
         /// </summary>
         /// <exception cref="ViaductHttpException">
         /// The server answered with a failure status. Carries the status code and the response body, which is
@@ -79,15 +86,15 @@ namespace Viaduct.Client
         {
             ct.ThrowIfCancellationRequested();
 
-            // Read before sending: the request is disposed along with the response, and these two are what the
-            // exception message needs.
+            // Kept before sending: the request is disposed along with the response, and these two are what the
+            // exception message needs. The address is written out only for that message, not on every call.
             var method = request.Method?.Method;
-            var uri = request.RequestUri?.ToString();
+            var requestUri = request.RequestUri;
 
             HttpResponseMessage res;
             try
             {
-                res = await Client.SendAsync(request, ct).ConfigureAwait(false);
+                res = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -97,11 +104,14 @@ namespace Viaduct.Client
             }
             catch (Exception ex)
             {
-                throw new ViaductException($"Error calling [{method} {uri}]: {ex.Message}", ex);
+                throw new ViaductException($"Error calling [{method} {requestUri}]: {ex.Message}", ex);
             }
 
             if (!res.IsSuccessStatusCode)
-                throw await CreateHttpExceptionAsync(res, method, uri, ct).ConfigureAwait(false);
+            {
+                using (res)
+                    throw await CreateHttpExceptionAsync(res, method, requestUri?.ToString(), ct).ConfigureAwait(false);
+            }
 
             return res;
         }
@@ -138,43 +148,17 @@ namespace Viaduct.Client
         }
 
         /// <summary>
-        /// The source-generated JSON contract for <typeparamref name="T"/>, or null when nothing registered
-        /// one. Null means reflection-based serialization, which is unavailable under AOT — hence the check
-        /// below in debug builds.
+        /// The JSON contract for <typeparamref name="T"/>: the client's own resolver, else Subro.Json's, the one the server
+        /// writes and reads with too. Never null: a type no context has is read by reflection with the same settings and
+        /// converters, or, in a trimmed or AOT app, is an error that names it.
         /// </summary>
-        protected JsonTypeInfo<T>? GetJsonTypeInfo<T>()
-        {
-            var info = Options.GetJsonTypeInfo<T>();
-#if DEBUG
-            // In AOT environments null info will cause ReadFromJsonAsync to fail.
-            // Provide a JsonSerializerContext via ViaductOptions.JsonOptions for AOT support.
-            if (info is null && !JsonSerializer.IsReflectionEnabledByDefault)
-                throw new ViaductException(
-                    $"No JsonTypeInfo found for '{typeof(T).Name}'. " +
-                    $"AOT detected - provide a JsonSerializerContext via ViaductOptions.JsonOptions.");
-#endif
-            return info;
-        }
+        protected JsonTypeInfo<T> GetJsonTypeInfo<T>() => Options.GetJsonTypeInfo<T>();
 
         /// <summary>
         /// extracts the desired type from the response
         /// </summary>
         protected async internal Task<T> ExtractResult<T>(HttpResponseMessage response, CancellationToken token = default)
-        {            
-            var info = GetJsonTypeInfo<T>();
-            if(info is null)
-            {
-#pragma warning disable IL2026 , IL3050
-                // until JsonSerializerContext support is added, attempt to deserialize without type info for non-AOT environments
-                //Hopefully in the future it is possible to provide generator order, or another way to emulate the same as JsonSerializable from within the code
-                //For now it is accepted that a user can use IL instead, even though the goal is to create AOT code
-                return (await response.Content.ReadFromJsonAsync<T>(token).ConfigureAwait(false))!;
-#pragma warning restore IL2026 , IL3050
-            }
-            else
-                return (await response.Content.ReadFromJsonAsync<T>(info, token).ConfigureAwait(false))!;
-            
-        }
+            => (await response.Content.ReadFromJsonAsync(GetJsonTypeInfo<T>(), token).ConfigureAwait(false))!;
 
 
     }

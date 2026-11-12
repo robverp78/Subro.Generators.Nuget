@@ -19,7 +19,7 @@ namespace Viaduct.Client
     {
         /// <summary>
         /// an optional type info resolver for the next (set of) clients being registered.
-        /// For keeping a general store of type resolvers, use <see cref="Viaduct.Json.AddContextToDefault(JsonSerializerContext)"/> instead
+        /// For keeping a general store of type resolvers, use <see cref="Subro.Json.AddContextToDefault(IJsonTypeInfoResolver)"/> instead
         /// </summary>
         public IJsonTypeInfoResolver? JsonTypeInfoResolver { get; set; }
 
@@ -56,38 +56,45 @@ namespace Viaduct.Client
     /// </summary>
     partial class ViaductClientFunctions
     {
+        /// <summary>The serializer options a client's own resolver is read through, one per resolver.</summary>
+        static readonly System.Runtime.CompilerServices.ConditionalWeakTable<IJsonTypeInfoResolver, JsonSerializerOptions> ResolverOptions = new();
+
+        /// <summary>Read-only from the start: a serializer options instance keeps the metadata it built only once it is.</summary>
+        static JsonSerializerOptions ReadThrough(IJsonTypeInfoResolver resolver)
+        {
+            var options = new JsonSerializerOptions(Subro.Json.Options) { TypeInfoResolver = resolver };
+            options.MakeReadOnly();
+            return options;
+        }
 
 
         extension(ViaductClientOptions options)
         {
             /// <summary>
-            /// The JSON contract for <typeparamref name="T"/>: the resolver set on these options first, then
-            /// the ones registered globally.
+            /// The JSON contract for <typeparamref name="T"/>, never null: the resolver set on these options first, then
+            /// Subro.Json's (<see cref="Subro.Json.TypeInfo{T}"/>), the one source of JSON type information the server's
+            /// endpoints read and write with as well. A type no context has is read by reflection with the same settings
+            /// and converters, or, where there is no reflection (a trimmed or AOT app), is an error that names it.
             /// </summary>
-            public JsonTypeInfo<T>? GetJsonTypeInfo<T>()
+            public JsonTypeInfo<T> GetJsonTypeInfo<T>()
             {
-
-                // option specific types first
-                if (options?.JsonTypeInfoResolver is { } resolver)
+                // option specific types first, through serializer options made once per resolver: asked directly, a
+                // resolver builds new metadata on every call, while JsonSerializerOptions keeps what it built.
+                if (options?.JsonTypeInfoResolver is { } resolver
+                    && ResolverOptions.GetValue(resolver, ReadThrough)
+                        .TryGetTypeInfo(typeof(T), out var info)
+                    && info is JsonTypeInfo<T> typed)
                 {
-                    var info = resolver.GetTypeInfo(typeof(T), Json.Options);
-                    if (info is JsonTypeInfo<T> typed)
-                        return typed;
-
+                    return typed;
                 }
-                return Json.GetTypeInfo<T>();
+                return Subro.Json.TypeInfo<T>();
             }
 
-            /// <summary>
-            /// Not used directly in the Viaduct server/client functionality, but can be used as an extra to deserialize json with the same (Aot safe) json serializers registered in Viaduct
-            /// </summary>
-            public T? Parse<T>(string json) => Json.Parse<T>(json, options.GetJsonTypeInfo<T>());
+            /// <summary>Parses JSON with the contract these options give, as a client's calls do.</summary>
+            public T? Parse<T>(string json) => Subro.Json.Parse(json, options.GetJsonTypeInfo<T>());
 
-
-            /// <summary>
-            /// Not used directly in the Viaduct server/client functionality, but can be used as an extra to serialize an object to json with the same (Aot safe) json serializers registered in Viaduct
-            /// </summary>
-            public string Stringify<T>(T Object) => Json.Stringify(Object, options.GetJsonTypeInfo<T>());
+            /// <summary>Writes JSON with the contract these options give, as a client's calls do.</summary>
+            public string Stringify<T>(T Object) => Subro.Json.Stringify(Object, options.GetJsonTypeInfo<T>());
             
         }
     }

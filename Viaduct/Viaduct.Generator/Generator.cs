@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using System;
 using System.Collections.Generic;
@@ -34,40 +34,43 @@ namespace Viaduct.Generation
             );
 
             //aot types
-            var aotTypes = results.Select(static (p,_) => p.AotTypes).Where(static tc=> tc is not null).SelectMany(static (t,_) => t!);
+            var aotTypes = results.Select(static (p,_) => p.AotTypes).Where(static tc=> tc is not null).SelectMany(static (t,_) => t!.Value);
             Subro.Generators.Json.JsonContextGenerator.AddAotTypeRegistration(context, aotTypes, "Viaduct_JsonTypes.g.cs");
 
-            //calledMethods and interfaces
-            // Collect all detected calls and deduplicate by interface name.
-            // Multiple call sites for the same interface (e.g. AddEndpoints + AddScopedAndMap)
-            // should only generate one mapping file.
-            var calledMethods = results.Select(static (p, _) => p.Method).Where(static m => m is not null).Collect();
-
-            // The XML documentation of referenced assemblies, handed to the generator as additional files by the
-            // props in Viaduct.Server and Viaduct.Client. See ReferenceDocumentation.
-            var referenceDocumentation = context.AdditionalTextsProvider
-                .Where(static file => file.Path.EndsWith(ViaductGeneratorFunctions.DocumentationFileExtension, StringComparison.OrdinalIgnoreCase))
+            // One output per interface and side: multiple call sites for the same interface (e.g. AddEndpoints +
+            // AddScopedAndMap) generate one mapping file. Grouped into items that compare by value, so an edit that
+            // leaves an interface and its calls as they were leaves its file alone, rather than every file being
+            // written again because one call anywhere changed.
+            var interfaceCalls = results
+                .Select(static (p, _) => p.Method)
+                .Where(static m => m is not null)
                 .Collect()
-                .Select(static (files, ct) => ReferenceDocumentation.Create(files, ct));
+                .SelectMany(static (infos, _) => infos
+                    .GroupBy(static info => (info!.IsServerCall, info.InterfaceMetaData.FullyQualifiedName))
+                    .Select(static group => new InterfaceCalls(
+                        group.Key.IsServerCall, group.First()!.InterfaceMetaData, group.Select(static m => m!).ToEquatable())));
 
-            context.RegisterSourceOutput(calledMethods.Combine(referenceDocumentation), static (spc, input) =>
+            // The XML documentation files of referenced projects, handed to the generator as additional files by the
+            // props in Viaduct.Server and Viaduct.Client. Only an interface that needs one opens it; see ReferenceDocumentation.
+            var documentationFiles = context.AdditionalTextsProvider
+                .Where(static file => file.Path.EndsWith(ViaductGeneratorFunctions.DocumentationFileExtension, StringComparison.OrdinalIgnoreCase))
+                .Collect();
+
+            context.RegisterSourceOutput(interfaceCalls.Combine(documentationFiles), static (spc, input) =>
             {
-                var (infos, documentation) = input;
-
-                foreach (var group in infos.GroupBy(info => new { info!.IsServerCall, info.InterfaceMetaData.FullyQualifiedName }))
+                var (calls, files) = input;
                 {
-                    MethodCallerInfo[] methods = [.. group!];
-                    var ifInfo = methods[0].InterfaceMetaData.WithDocumentation(documentation);
+                    var ifInfo = calls.InterfaceMetaData.WithDocumentation(files, spc.CancellationToken);
 
                     string generated, type;
-                    if (group.Key.IsServerCall) //server
+                    if (calls.IsServerCall) //server
                     {                  
-                        generated = CreateServerMappingCode(ifInfo, group!);
+                        generated = CreateServerMappingCode(ifInfo, calls.Callers);
                         type = "Server";
                     }
                     else //client
                     {
-                        generated = new Client.ClientGeneratorFunctions.ClientCodeCreator(ifInfo, group!).Create();
+                        generated = new Client.ClientGeneratorFunctions.ClientCodeCreator(ifInfo, calls.Callers).Create();
                         type = "Client";
                     }
 

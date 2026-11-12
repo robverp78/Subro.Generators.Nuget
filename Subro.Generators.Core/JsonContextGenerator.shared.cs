@@ -11,6 +11,11 @@ namespace Subro.Generators.Json
         const string JsonTypesNamepace = "Subro.JsonTypes",
             jsonTypesInternalClassName = "InternalJsonTypes";
 
+        /// <summary>
+        /// A <c>[JsonSerializable]</c> attribute for each type, written as given: each name must be a C# type as it can stand
+        /// in <c>typeof</c>, fully qualified (<see cref="SymbolDisplayFormat.FullyQualifiedFormat"/>), so that <c>int</c> and
+        /// <c>int?</c> stay keywords rather than becoming <c>global::int</c>, which does not compile.
+        /// </summary>
         public static string CreateTypeAttributes(IReadOnlyCollection<string> typeFullNames)
         {
             var sb = new StringBuilder($$"""
@@ -20,7 +25,7 @@ namespace {{JsonTypesNamepace}}
 """);
             foreach (var type in typeFullNames)
                 sb.Append($@"
-    [global::System.Text.Json.Serialization.JsonSerializable(typeof(global::{type}))]");
+    [global::System.Text.Json.Serialization.JsonSerializable(typeof({type}))]");
 
 
             sb.Append(@"

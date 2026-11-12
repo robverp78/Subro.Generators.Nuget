@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Xml;
@@ -19,100 +20,108 @@ namespace Viaduct.Generation
     /// those files here is not an option either — analyzers may not do file IO, for good reasons about
     /// determinism and caching.
     /// <para>
-    /// So the build hands them over instead. The props shipped with Viaduct.Server and Viaduct.Client add each
-    /// referenced assembly's XML file as an <c>AdditionalFiles</c> item, which the generator reads through
-    /// Roslyn's own tracked, cached <see cref="AdditionalText"/> API.
+    /// So the build hands them over instead. The props shipped with Viaduct.Server and Viaduct.Client add the XML
+    /// file of each referenced project (and of the assemblies named in <c>ViaductDocumentationAssemblies</c>) as an
+    /// <c>AdditionalFiles</c> item, which the generator reads through Roslyn's own tracked, cached
+    /// <see cref="AdditionalText"/> API.
+    /// </para>
+    /// <para>
+    /// Only what an interface needs is read: the file of the assembly each undocumented method was declared in,
+    /// streamed until its members are found. Parsing every file whole cost a project with many package references
+    /// seconds and gigabytes on every build (Vesta.Api: 315 files, 75 MB).
     /// </para>
     /// </remarks>
-    internal sealed class ReferenceDocumentation
-    {
-        /// <summary>Nothing was handed over, or none of it parsed.</summary>
-        public static readonly ReferenceDocumentation Empty = new(ImmutableDictionary<string, string>.Empty);
-
-        private readonly IReadOnlyDictionary<string, string> members;
-
-        private ReferenceDocumentation(IReadOnlyDictionary<string, string> members) => this.members = members;
-
-        /// <summary>The documentation for a member, or null when the file did not describe it.</summary>
-        public string? this[string? documentationId]
-            => documentationId is not null && members.TryGetValue(documentationId, out var member) ? member : null;
-
-        public bool IsEmpty => members.Count == 0;
-
-        /// <summary>
-        /// Everything documented in the given files, by documentation comment id.
-        /// </summary>
-        /// <remarks>
-        /// Ids are unique across assemblies — they are fully qualified — so one lookup covers every reference.
-        /// A file that cannot be parsed is skipped: it costs the summaries of that assembly, not the build.
-        /// </remarks>
-        public static ReferenceDocumentation Create(ImmutableArray<AdditionalText> files, CancellationToken ct)
-        {
-            if (files.IsDefaultOrEmpty)
-                return Empty;
-
-            Dictionary<string, string>? members = null;
-
-            foreach (var file in files)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                if (file.GetText(ct)?.ToString() is not { Length: > 0 } content)
-                    continue;
-
-                try
-                {
-                    var elements = XDocument.Parse(content).Root?.Element("members")?.Elements("member");
-                    if (elements is null)
-                        continue;
-
-                    foreach (var element in elements)
-                    {
-                        if (element.Attribute("name")?.Value is { Length: > 0 } name)
-                            (members ??= new(StringComparer.Ordinal))[name] = element.ToString();
-                    }
-                }
-                catch (XmlException)
-                {
-                    // Not a documentation file, or a broken one. Either way there is nothing to take from it.
-                }
-            }
-
-            return members is null ? Empty : new ReferenceDocumentation(members);
-        }
-    }
-
-    internal static class ReferenceDocumentationExtensions
+    internal static class ReferenceDocumentation
     {
         /// <summary>
         /// The same interface, with any summary and description that were missing filled in from the
-        /// documentation of the assembly it was declared in.
+        /// documentation file of the assembly each method was declared in.
         /// </summary>
         /// <remarks>
-        /// Applied here rather than while the metadata is built, because the documentation arrives through a
-        /// provider of its own: keeping the transform independent of it is what lets Roslyn cache each half.
-        /// A method that already has both — from its attributes, or from source it could read — is left alone.
+        /// Applied when the source is produced rather than while the metadata is built, because the files arrive
+        /// through a provider of their own: keeping the transform independent of them is what lets Roslyn cache
+        /// each half. A method that already has both — from its attributes, or from source it could read — is left
+        /// alone, and no file is opened when no method needs one.
         /// </remarks>
-        public static InterfaceMetaData WithDocumentation(this InterfaceMetaData info, ReferenceDocumentation documentation)
+        public static InterfaceMetaData WithDocumentation(
+            this InterfaceMetaData info, ImmutableArray<AdditionalText> files, CancellationToken ct)
         {
-            if (documentation.IsEmpty || info.Methods.All(static m => m.DocumentationId is null))
+            if (files.IsDefaultOrEmpty)
                 return info;
 
-            var methods = info.Methods.Select(method =>
+            var wanted = info.Methods
+                .Where(static m => m.DocumentationId is not null && m.DocumentationAssembly is not null)
+                .GroupBy(static m => m.DocumentationAssembly!, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (wanted.Count == 0)
+                return info;
+
+            var found = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var assembly in wanted)
             {
-                if (method.DocumentationId is null || documentation[method.DocumentationId] is not { } member)
-                    return method;
+                ct.ThrowIfCancellationRequested();
+                if (FileOf(files, assembly.Key) is { } file)
+                    Read(file, new HashSet<string>(assembly.Select(static m => m.DocumentationId!), StringComparer.Ordinal), found, ct);
+            }
 
-                var (summary, remarks) = ViaductGeneratorFunctions.ParseDocumentation(member);
+            if (found.Count == 0)
+                return info;
 
-                return method with
+            return info with
+            {
+                Methods = [.. info.Methods.Select(method =>
                 {
-                    Summary = method.Summary ?? summary,
-                    Description = method.Description ?? remarks,
-                };
-            });
+                    if (method.DocumentationId is null || !found.TryGetValue(method.DocumentationId, out var member))
+                        return method;
 
-            return info with { Methods = [.. methods] };
+                    var (summary, remarks) = ViaductGeneratorFunctions.ParseDocumentation(member);
+                    return method with
+                    {
+                        Summary = method.Summary ?? summary,
+                        Description = method.Description ?? remarks,
+                    };
+                })],
+            };
+        }
+
+        /// <summary>The documentation file of <paramref name="assembly"/>: the build names each after its assembly.</summary>
+        static AdditionalText? FileOf(ImmutableArray<AdditionalText> files, string assembly)
+        {
+            foreach (var file in files)
+                if (string.Equals(Path.GetFileNameWithoutExtension(file.Path), assembly, StringComparison.OrdinalIgnoreCase))
+                    return file;
+            return null;
+        }
+
+        /// <summary>
+        /// Adds to <paramref name="found"/> the <c>&lt;member&gt;</c> elements of <paramref name="file"/> named in
+        /// <paramref name="ids"/>, streaming, and stops once all are found. A file that cannot be read is skipped: it
+        /// costs the summaries of that assembly, not the build.
+        /// </summary>
+        static void Read(AdditionalText file, HashSet<string> ids, Dictionary<string, string> found, CancellationToken ct)
+        {
+            if (file.GetText(ct)?.ToString() is not { Length: > 0 } content)
+                return;
+
+            try
+            {
+                using var reader = XmlReader.Create(new StringReader(content), new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    IgnoreComments = true,
+                    IgnoreWhitespace = true,
+                });
+
+                while (ids.Count > 0 && reader.ReadToFollowing("member"))
+                {
+                    if (reader.GetAttribute("name") is { } name && ids.Remove(name))
+                        found[name] = XNode.ReadFrom(reader).ToString();
+                }
+            }
+            catch (XmlException)
+            {
+                // Not a documentation file, or a broken one. Either way there is nothing more to take from it.
+            }
         }
     }
 }

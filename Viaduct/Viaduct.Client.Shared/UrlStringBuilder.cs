@@ -23,7 +23,7 @@ namespace Viaduct.Client
         /// Should append the parameter value of the given parameter name to the string builder. 
         /// </summary>        
         /// <remarks>
-        /// The generator chooses the type of resolver that is used depending on the <see cref="ViaductClientOptions.UseLowerCaseRouteParameters"/> value.
+        /// The generator chooses the type of resolver that is used depending on the <see cref="ViaductOptions.ForceLowerCaseRouteParameters"/> value.
         /// If this value is true: all parameters names are made lowercase before this function is called
         /// </remarks> 
         /// <returns><c>true</c> if the parameter was resolved succesfully</returns>

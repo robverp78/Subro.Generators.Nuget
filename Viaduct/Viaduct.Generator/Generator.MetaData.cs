@@ -166,7 +166,7 @@ namespace Viaduct.Generation
                 }
                 else
                 {
-                    var methodArray = methodInfoList.ToImmutableArray();
+                    var methodArray = methodInfoList.ToEquatable();
                     // ToDisplayString() spells the global namespace as "<global namespace>", which is not a
                     // name any generated `using` can carry. An interface declared there has no namespace at all.
                     var ns = type.ContainingNamespace.IsGlobalNamespace
@@ -321,7 +321,15 @@ namespace Viaduct.Generation
                         getTemplateId(),
                         querySafe,
                         IsSimpleType,
-                        parameter.IsOptional);
+                        parameter.IsOptional,
+                        parameter.Type switch
+                        {
+                            { TypeKind: TypeKind.TypeParameter } => QueryValueKind.Unknown,
+                            { IsValueType: true, OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } => QueryValueKind.NullableValueType,
+                            { IsValueType: true } => QueryValueKind.ValueType,
+                            { IsReferenceType: true } => QueryValueKind.ReferenceType,
+                            _ => QueryValueKind.Unknown,
+                        });
 
                     parameters.Add(paramInfo);
 
@@ -369,6 +377,11 @@ namespace Viaduct.Generation
                     DocumentationId = documentation.Summary is null || documentation.Description is null
                         ? method.GetDocumentationCommentId()
                         : null,
+                    // Only a method read from metadata has its documentation in a file; one in source has been read.
+                    DocumentationAssembly = (documentation.Summary is null || documentation.Description is null)
+                        && method.DeclaringSyntaxReferences.IsEmpty
+                            ? method.ContainingAssembly?.Name
+                            : null,
                 };
 
                 if (!IsAsync)

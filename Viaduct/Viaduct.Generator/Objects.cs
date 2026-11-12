@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using Subro.Generators;
 using System;
 using System.Collections.Generic;
@@ -36,7 +36,7 @@ namespace Viaduct.Generation
 
     public record InterfaceMetaData(
         string Name, string Namespace, [StringSyntax("Route")] string? BasePath,
-        ImmutableArray<MethodCreationInfo> Methods)
+        EquatableArray<MethodCreationInfo> Methods)
     {
 
         public override string ToString() => Name;
@@ -68,12 +68,18 @@ namespace Viaduct.Generation
     }
 
 
-    public record CreationInfo(MethodCallerInfo? Method, TypeReference[]? AotTypes) 
+    public record CreationInfo(MethodCallerInfo? Method, EquatableArray<TypeReference>? AotTypes) 
     {
         
     }
 
 
+
+    /// <summary>
+    /// One generated file's worth: an interface and every call that registers it on one side (client or server).
+    /// Compared by value, so an edit elsewhere leaves it, and its generated file, as it was.
+    /// </summary>
+    public record InterfaceCalls(bool IsServerCall, InterfaceMetaData InterfaceMetaData, EquatableArray<MethodCallerInfo> Callers);
 
     public record MethodCallerInfo(string Name, LocationInfo Location,string Interceptor, bool IsServerCall, InterfaceMetaData InterfaceMetaData) 
     {
@@ -87,7 +93,7 @@ namespace Viaduct.Generation
         string Name,
         string RouteTemplate,
         string HttpMethod,
-        ParameterCreationInfo[] Parameters,        
+        EquatableArray<ParameterCreationInfo> Parameters,        
         ParameterCreationInfo? Body,
         ParameterCreationInfo? CancellationToken,
         TypeReference ReturnType,      
@@ -120,6 +126,12 @@ namespace Viaduct.Generation
         /// </summary>
         public string? DocumentationId { get; init; }
 
+        /// <summary>
+        /// The assembly a method without source here was declared in, whose documentation file holds
+        /// <see cref="DocumentationId"/>: the one file read for it. Null for a method in this compilation.
+        /// </summary>
+        public string? DocumentationAssembly { get; init; }
+
         public IEnumerable<ParameterCreationInfo> GetQueryParameters() => Parameters.Where(static p => p.QueryParameter);
     }
 
@@ -131,9 +143,29 @@ namespace Viaduct.Generation
     string? PredefinedTemplateId,
     bool QueryParameter,
     bool IsSimpleType,
-    bool IsOptional) 
+    bool IsOptional,
+    QueryValueKind ValueKind = QueryValueKind.Unknown) 
     {
 
+    }
+
+    /// <summary>
+    /// What a parameter's type says about null, so the generated client tests a query value for null only when it can be
+    /// one, and without boxing it.
+    /// </summary>
+    public enum QueryValueKind
+    {
+        /// <summary>Not known, such as a type parameter: tested as <c>(object?)value is null</c>, which fits any type.</summary>
+        Unknown,
+
+        /// <summary>A value type that is not nullable: never null, so never tested.</summary>
+        ValueType,
+
+        /// <summary><c>Nullable&lt;T&gt;</c>: tested and unwrapped with <c>is { } v</c>, so the writer for <c>T</c> is called.</summary>
+        NullableValueType,
+
+        /// <summary>A reference type: tested with <c>is null</c>.</summary>
+        ReferenceType,
     }
 
 

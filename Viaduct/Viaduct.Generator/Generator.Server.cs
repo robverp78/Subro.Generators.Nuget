@@ -111,6 +111,12 @@ namespace Viaduct.Generation
         /// <summary>A C# string literal for <paramref name="value"/>, quoted and escaped.</summary>
         static string Literal(string value) => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
 
+        /// <summary>Whether a client may leave a parameter out: it is nullable, or has a default.</summary>
+        static bool MayBeLeftOut(ParameterCreationInfo parameter)
+            => parameter.IsOptional
+               || parameter.ValueKind == QueryValueKind.NullableValueType
+               || parameter.Type.FullName.EndsWith("?", StringComparison.Ordinal);
+
         /// <summary>
         /// The names of the server options the generated code reads. Spelled once here because the generator
         /// cannot reference Viaduct.Server to use <c>nameof</c>: that would put ASP.NET inside an analyzer.
@@ -224,18 +230,23 @@ namespace {{GeneratedNameSpace}}
                         sbMethod.Append(route);
                     }}
                     
-                    void AppendRouteParameter(string parameterName)
+                    void AppendRouteParameter(string parameterName, bool optional)
                     {{                        
                         if(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)})
                             parameterName = parameterName.ToLower();
                         if(routeParams.Contains(parameterName)) return;  //parameter was defined in predefined route, do not add again
-                        sbMethod.Append(""/{{"").Append(parameterName).Append('}}');
+                        sbMethod.Append(""/{{"").Append(parameterName).Append(optional ? ""?}}"" : ""}}"");
                     }}
-");  //TODO: check cases like optional when adding route parameters
+");
 
-                        foreach (var param in queryParameters)
-                            sb.Append($@"                    
-                    AppendRouteParameter({Literal(param.Name)});");
+                        // A parameter that may be left out (nullable, or with a default) is an optional segment, as long as all after
+                        // it may be too: the client leaves a null out, and a route can only end in optional segments.
+                        var optionalFrom = queryParameters.Length;
+                        while (optionalFrom > 0 && MayBeLeftOut(queryParameters[optionalFrom - 1]))
+                            optionalFrom--;
+                        for (var index = 0; index < queryParameters.Length; index++)
+                            sb.Append($@"
+                    AppendRouteParameter({Literal(queryParameters[index].Name)}, {(index >= optionalFrom ? "true" : "false")});");
                         sb.Append(@"                                
                     route = sbMethod.ToString();
                 }
@@ -255,7 +266,7 @@ namespace {{GeneratedNameSpace}}
             if(routeParams.Count > 0)
                 throw new ViaductException(""Route template for method '{method.Name}' contains parameters that cannot be found in the method signature. Parameters: "" + string.Join("", "", routeParams));
             var endpoint = group.MapMethods(route, [""{method.HttpMethod}""], 
-                {(method.IsAsync ? "async " : "")}(");
+                (");
                 for (int i = 0; i < method.Parameters.Length; i++)
                 {
                     var param = method.Parameters[i];
@@ -265,29 +276,16 @@ namespace {{GeneratedNameSpace}}
                 }
 
                 if (method.Parameters.Length > 0) sb.Append(", ");
-                sb.Append("[FromServices] ").Append(info.FullyQualifiedName).Append(@" __service) => {");
-                if (method.ReturnsValue)
-                    sb.Append("return ");
-                if (method.IsAsync)
-                    sb.Append("await ");
-                sb.Append("__service.").Append(method.Name).Append('(');
+                // The service's own result is the handler's: a Task or ValueTask, with or without a value, is what a minimal
+                // API awaits and answers itself (200, with the value as JSON), so no async lambda of its own around it.
+                sb.Append("[FromServices] ").Append(info.FullyQualifiedName).Append(@" __service) => __service.").Append(method.Name).Append('(');
                 for (int i = 0; i < method.Parameters.Length; i++)
                 {
                     var param = method.Parameters[i];
                     if (i > 0) sb.Append(", ");
                     sb.Append(param.Name);
                 }
-                if (method.IsAsync)
-                    sb.Append(").ConfigureAwait(false);");
-                else
-                    sb.Append(");");
-
-
-                if (!method.ReturnsValue)
-                    sb.Append("return TypedResults.Ok();");
-
-                sb.Append(@"                    
-                    });
+                sb.Append(@"));
 ");
                 sb.AppendEndpointMetadata(info, method);
                 sb.Append(@"

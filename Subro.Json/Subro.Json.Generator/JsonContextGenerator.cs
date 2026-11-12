@@ -1,6 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
 using Subro.JsonTypes;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using Subro.Generators;
 
@@ -36,10 +35,22 @@ namespace Subro.Generators.Json
                 IMethodSymbol method => method.ReturnType,
                 _ => null
             };
-            if (typeSymbol == null)
+            // A type parameter (or a type built from one) has no contract until it is known, void has none at all, and an
+            // error type is the compiler's to report.
+            if (typeSymbol is null or IErrorTypeSymbol || typeSymbol.SpecialType == SpecialType.System_Void || ContainsTypeParameter(typeSymbol))
                 return null;
-            return new TypeReference(typeSymbol);
+
+            // Fully qualified, keywords kept: typeof(int?) and typeof(global::System.Collections.Generic.List<global::My.Sample>).
+            return new TypeReference(typeSymbol.Name, typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
         }
+
+        static bool ContainsTypeParameter(ITypeSymbol type) => type switch
+        {
+            ITypeParameterSymbol => true,
+            IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+            INamedTypeSymbol named => named.TypeArguments.Any(ContainsTypeParameter),
+            _ => false,
+        };
 
         
 

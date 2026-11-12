@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Viaduct.Server by project reference instead of the package, for a solution that builds Viaduct from source
+    (Vesta): the library, its generator, and what the package's own props add (the interceptor namespace, the
+    referenced projects' documentation). An analyzer does not come along with a project reference, so the
+    generator is referenced here as well.
+      <Import Project="..\Subro.Generators.Nuget\Viaduct\Viaduct\Viaduct.Server.FromSource.props" />
+  -->
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)Viaduct.Server.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\Viaduct.Generator\Viaduct.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)build\Viaduct.Server.props" />
+</Project>

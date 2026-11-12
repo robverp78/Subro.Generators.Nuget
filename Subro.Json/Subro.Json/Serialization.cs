@@ -12,42 +12,26 @@ namespace Subro
     {
 
         /// <summary>
-        /// Parses the specified json into a value of type T, using one of the registered <see cref="JsonTypeInfo"/>s
+        /// Parses <paramref name="json"/> into a <typeparamref name="T"/>, with the contract <see cref="TypeInfo{T}"/> gives.
         /// </summary>
-        public static T? Parse<T>(string json) => Parse<T>(json, GetTypeInfo<T>());
+        public static T? Parse<T>(string json) => JsonSerializer.Deserialize(json, TypeInfo<T>());
 
         /// <summary>
-        /// Parses the specified json into a value of type T, using the specified <see cref="JsonTypeInfo"/>.
-        /// Without one, falls back to reflection with the settings and converters of <see cref="Options"/>.
+        /// Parses <paramref name="json"/> into a <typeparamref name="T"/> with <paramref name="info"/>; without one, with the
+        /// contract <see cref="TypeInfo{T}"/> gives.
         /// </summary>
-        public static T? Parse<T>(string json, JsonTypeInfo<T>? info)
-        {
-            if (info == null)
-#pragma warning disable IL2026, IL3050 //Checks for AOT environment are in GetJsonTypeInfo
-                return JsonSerializer.Deserialize<T>(json, ReflectionOptions);
-#pragma warning restore IL2026, IL3050
-            else
-                return JsonSerializer.Deserialize<T>(json, info);
-        }
+        public static T? Parse<T>(string json, JsonTypeInfo<T>? info) => JsonSerializer.Deserialize(json, info ?? TypeInfo<T>());
 
         /// <summary>
-        /// Converts the value into a json string, using one of the registered <see cref="JsonTypeInfo"/>s
+        /// Writes <paramref name="value"/> as JSON, with the contract <see cref="TypeInfo{T}"/> gives.
         /// </summary>
-        public static string Stringify<T>(this T value) => Stringify(value, GetTypeInfo<T>());
+        public static string Stringify<T>(this T value) => JsonSerializer.Serialize(value, TypeInfo<T>());
 
         /// <summary>
-        /// Converts the value into a json string, using the specified <see cref="JsonTypeInfo"/>.
-        /// Without one, falls back to reflection with the settings and converters of <see cref="Options"/>.
+        /// Writes <paramref name="value"/> as JSON with <paramref name="info"/>; without one, with the contract
+        /// <see cref="TypeInfo{T}"/> gives.
         /// </summary>
-        public static string Stringify<T>(this T value, JsonTypeInfo<T>? info)
-        {
-            if (info == null)
-#pragma warning disable IL2026, IL3050 //Checks for AOT environment are done in GetJsonTypeInfo
-                return JsonSerializer.Serialize(value, ReflectionOptions);
-#pragma warning restore IL2026, IL3050
-            else
-                return JsonSerializer.Serialize(value, info);
-        }
+        public static string Stringify<T>(this T value, JsonTypeInfo<T>? info) => JsonSerializer.Serialize(value, info ?? TypeInfo<T>());
 
     }
 }

@@ -155,7 +155,10 @@ namespace Viaduct.Server
             services.AddSingleton<ViaductJsonTypesMarker>();
             services.ConfigureHttpJsonOptions(options =>
             {
-                options.SerializerOptions.TypeInfoResolverChain.Add(new Json.ViaductGlobalJsonTypeInfoForwarder());
+                // Subro.Json's converters, and its registered (source-generated) contexts ahead of reflection: the clients
+                // read and write with the same, so a type is written and read alike on both sides.
+                Subro.Json.AddRegisteredConverters(options.SerializerOptions);
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, new Subro.Json.GlobalJsonTypeInfoForwarder());
             });
             return services;
         }

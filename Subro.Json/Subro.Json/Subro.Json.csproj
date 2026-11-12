@@ -10,6 +10,8 @@
     <Description>AOT-friendly JSON serialization library with integrated source generator for .NET 8+.</Description>
     <PackageTags>json;serialization;source-generator;aot;system-text-json</PackageTags>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <!-- Checked for trimming and AOT as it builds: it is what a phone's client (MAUI) reads and writes JSON through. -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <!-- Build the generator as a dependency; do not add it as an assembly reference. -->

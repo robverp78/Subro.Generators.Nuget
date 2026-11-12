@@ -16,8 +16,14 @@
     takes any .xml among them as documentation to process — handed the framework's, it generates a file so
     large the build fails on the metadata string limit.
 
-    So each one is copied next to the build output under an extension only this generator looks for. Framework
-    references are skipped, being both enormous and never where a service interface lives.
+    So each one is copied next to the build output under an extension only this generator looks for.
+
+    Only referenced projects are handed over, which is where a shared interface normally lives. A package is not:
+    taking every reference's documentation handed a project with many packages hundreds of files (Vesta.Api: 315,
+    75 MB, framework assemblies among them). An interface that comes from a package is named by assembly in
+    ViaductDocumentationAssemblies, separated by semicolons:
+      <ViaductDocumentationAssemblies>My.Contracts</ViaductDocumentationAssemblies>
+    The generator then opens only the file of the assembly an undocumented method was declared in.
   -->
   <Target Name="ViaductAddReferenceDocumentation"
           BeforeTargets="CoreCompile"
@@ -36,12 +42,21 @@
   <Target Name="ViaductCollectReferenceDocumentation"
           BeforeTargets="ViaductAddReferenceDocumentation"
           DependsOnTargets="ResolveAssemblyReferences">
+    <PropertyGroup>
+      <_ViaductDocumentationAssemblies>;$(ViaductDocumentationAssemblies);</_ViaductDocumentationAssemblies>
+    </PropertyGroup>
     <ItemGroup>
       <_ViaductCandidateDocumentation Include="@(ReferencePath->'%(RootDir)%(Directory)%(Filename).xml')"
-                                      Condition="'%(ReferencePath.FrameworkFile)' != 'true'" />
+                                      Condition="'%(ReferencePath.ReferenceSourceTarget)' == 'ProjectReference' or $(_ViaductDocumentationAssemblies.Contains(';%(ReferencePath.Filename);'))" />
       <_ViaductReferenceDocumentationSource Include="@(_ViaductCandidateDocumentation)" Condition="Exists('%(Identity)')" />
       <AdditionalFiles Include="@(_ViaductReferenceDocumentationSource->'$(IntermediateOutputPath)viaduct/%(Filename).viaductdoc')" />
+      <FileWrites Include="@(_ViaductReferenceDocumentationSource->'$(IntermediateOutputPath)viaduct/%(Filename).viaductdoc')" />
+
+      <!-- Copies of documentation no longer handed over, such as the packages' from before only projects were. -->
+      <_ViaductStaleDocumentation Include="$(IntermediateOutputPath)viaduct/*.viaductdoc"
+                                  Exclude="@(_ViaductReferenceDocumentationSource->'$(IntermediateOutputPath)viaduct/%(Filename).viaductdoc')" />
     </ItemGroup>
+    <Delete Files="@(_ViaductStaleDocumentation)" />
   </Target>
 
 </Project>
