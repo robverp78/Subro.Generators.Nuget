@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
@@ -8,6 +8,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Viaduct;
 using Viaduct.Generation;
+
+using static Subro.Generators.GeneratorFunctions;
 
 namespace Viaduct.Generation
 {
@@ -107,9 +109,6 @@ namespace Viaduct.Generation
 
             return info.TypeArgSegment is { Length: > 0 } segment ? $"{name} ({segment})" : name;
         }
-
-        /// <summary>A C# string literal for <paramref name="value"/>, quoted and escaped.</summary>
-        static string Literal(string value) => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
 
         /// <summary>Whether a client may leave a parameter out: it is nullable, or has a default.</summary>
         static bool MayBeLeftOut(ParameterCreationInfo parameter)

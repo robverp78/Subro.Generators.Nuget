@@ -10,6 +10,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 
+using static Subro.Generators.GeneratorFunctions;
+
 namespace Viaduct.Generation
 {
     /// <summary>
@@ -221,10 +223,5 @@ namespace Viaduct.Generation
         };
 
         static string NullableOf(string type) => type + "?";
-
-        static string Identifier(string name) =>
-            SyntaxFacts.GetKeywordKind(name) != SyntaxKind.None || SyntaxFacts.GetContextualKeywordKind(name) != SyntaxKind.None
-                ? "@" + name
-                : name;
     }
 }

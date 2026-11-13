@@ -1,4 +1,4 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Subro.Generators;
 using System;
 using System.Collections.Generic;
@@ -7,6 +7,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Viaduct.Client;
 using static Viaduct.Generation.ViaductGeneratorFunctions;
+
+using static Subro.Generators.GeneratorFunctions;
 
 namespace Viaduct.Generation
 {
@@ -20,9 +22,6 @@ namespace Viaduct.Generation
         {
             /// <summary>The start of a call that writes a query or route value: escaped, invariant, by the value's type.</summary>
             const string QueryValueWriter = "global::Viaduct.Client.ViaductClientFunctions.AppendQueryValue(__sb, ";
-
-            /// <summary>A C# string literal for <paramref name="value"/>, quoted and escaped.</summary>
-            static string Literal(string value) => Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(value, quote: true);
 
             /// <summary>One part of a method's route template: text as it stands, or the value of one of the method's parameters.</summary>
             record RoutePart(string? Text, ParameterCreationInfo? Parameter);
