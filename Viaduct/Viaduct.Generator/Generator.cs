@@ -95,8 +95,12 @@ namespace Viaduct.Generation
             namespace System.Runtime.CompilerServices
             {
                 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-                file sealed class InterceptsLocationAttribute(int version, string data) : Attribute
+                file sealed class InterceptsLocationAttribute : Attribute
                 {
+                    // Read by the compiler from the attribute itself; a constructor, so the parameters are not reported unread.
+                    public InterceptsLocationAttribute(int version, string data)
+                    {
+                    }
                 }
             }
             """;
