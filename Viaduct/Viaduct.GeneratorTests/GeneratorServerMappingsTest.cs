@@ -391,6 +391,57 @@ namespace Viaduct.Tests
             await Assert.That(client).Contains("configure = WithRouteDefaults(configure);");
         }
 
+        /// <summary>
+        /// The server maps a route parameter with its type's constraint, only for a type whose constraint reads a value as
+        /// its binding does; a base path's parameter gets one when every method agrees on it.
+        /// </summary>
+        [Test]
+        public async Task RouteTypeConstraints_AreWrittenForTypesThatHaveOne_AndCompile()
+        {
+            const string source = Usings + """
+                using System;
+                using System.Threading;
+
+                namespace TestApp
+                {
+                    public enum Kind { One, Two }
+
+                    [BasePath("/clubs/{clubId}")]
+                    public interface IConstrainedApi
+                    {
+                        [CustomRoute("/items/{number}")]
+                        Task<int> GetAsync(Guid clubId, int number, bool? flag, string text, DateOnly day, Kind kind, CancellationToken cancellationToken = default);
+
+                        Task<int> CountAsync(Guid clubId, long total, CancellationToken cancellationToken = default);
+                    }
+
+                    class Startup
+                    {
+                        void Configure(IEndpointRouteBuilder app) => app.AddEndpoints<IConstrainedApi>();
+                    }
+                }
+                """;
+
+            var compiler = createCompiler();
+            compiler.CheckErrors = false;
+            compiler.IncrementalGenerators.Add(new ViaductGenerator());
+            var compilation = compiler.Create(source);
+
+            var errors = AllDiagnostics(compilation)
+                .Where(d => d.Severity == DiagnosticSeverity.Error && !d.ToString().Contains("Viaduct_AotTypes"))
+                .ToArray();
+            await Assert.That(errors).IsEmpty();
+
+            var server = compilation.GeneratorResults.SelectMany(static g => g.Results).SelectMany(static r => r.GeneratedSources)
+                .Single(static s => s.HintName.Contains("IConstrainedApi_ServerMapping")).SourceText.ToString();
+
+            await Assert.That(server).Contains("""basePath = WithTypeConstraints(basePath, new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase) { ["clubId"] = "guid" });""");
+            await Assert.That(server).Contains("""["number"] = "int", ["flag"] = "bool" }""");
+            await Assert.That(server).Contains("""["total"] = "long" }""");
+            foreach (var unconstrained in new[] { "text", "day", "kind" })
+                await Assert.That(server).DoesNotContain($"""["{unconstrained}"] =""");
+        }
+
         private const string GenericCrudSource = Usings + """
 
             namespace TestApp

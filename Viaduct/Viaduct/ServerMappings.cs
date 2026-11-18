@@ -52,6 +52,23 @@ namespace Viaduct.Server
         /// </para>
         /// </remarks>
         public bool GenerateEndpointNames { get; set; } = true;
+
+        /// <summary>
+        /// Whether a route parameter is mapped with its parameter's type as a constraint, such as <c>{userId:guid}</c>.
+        /// Default <c>true</c>.
+        /// </summary>
+        /// <remarks>
+        /// Without one, ASP.NET Core ranks <c>/users/{userId}</c> and <c>/users/{search}</c> alike, and answers every
+        /// request to either with a 500 for matching both. With it, a Guid goes to the first and other text to the second.
+        /// A value that is not of the type answers 404 instead of 400, as no endpoint matches it.
+        /// <para>
+        /// Only parameters of a type whose constraint reads a value as its binding does: <c>Guid</c>, <c>int</c>,
+        /// <c>long</c>, <c>bool</c>, <c>decimal</c>, <c>double</c>, <c>float</c>, or one of those nullable. A route that
+        /// gives a parameter a constraint of its own keeps it. Only the server maps constraints; the client's paths do
+        /// not change.
+        /// </para>
+        /// </remarks>
+        public bool UseRouteTypeConstraints { get; set; } = true;
     }
 
     /// <summary>
@@ -209,6 +226,38 @@ namespace Viaduct.Server
 
         [GeneratedRegex(ViaductFunctions.GetRouteParametersPattern)]
         private static partial Regex GetRouteParametersRegex();
+
+        /// <summary>A route parameter, not an escaped brace: <c>{id}</c>, <c>{id?}</c>, <c>{id=5}</c>, <c>{id:int}</c>, <c>{*path}</c>.</summary>
+        [GeneratedRegex(@"(?<!\{)\{(?<catchAll>\*{0,2})(?<name>[A-Za-z_][A-Za-z0-9_]*)(?<rest>[^{}]*)\}(?!\})")]
+        private static partial Regex RouteParameterRegex();
+
+        /// <summary>
+        /// <paramref name="template"/> with each parameter that <paramref name="constraints"/> names given that constraint:
+        /// <c>{userId}</c> becomes <c>{userId:guid}</c>, <c>{age?}</c> <c>{age:int?}</c>. A parameter with a constraint of
+        /// its own, and a catch-all, are left as they are. See <see cref="ViaductServerOptions.UseRouteTypeConstraints"/>.
+        /// </summary>
+        /// <param name="constraints">
+        /// The constraint per parameter name, as the dictionary's comparer matches names; the generated mappings ignore case,
+        /// as their route parameter names do.
+        /// </param>
+        public static string WithTypeConstraints([StringSyntax(ViaductFunctions.RouteSyntax)] string template, IReadOnlyDictionary<string, string> constraints)
+        {
+            ArgumentNullException.ThrowIfNull(template);
+            ArgumentNullException.ThrowIfNull(constraints);
+
+            if (constraints.Count == 0 || template.IndexOf('{') < 0)
+                return template;
+
+            return RouteParameterRegex().Replace(template, match =>
+            {
+                var rest = match.Groups["rest"].Value;
+                if (match.Groups["catchAll"].Length > 0 || rest.StartsWith(':')
+                    || !constraints.TryGetValue(match.Groups["name"].Value, out var constraint))
+                    return match.Value;
+
+                return "{" + match.Groups["name"].Value + ":" + constraint + rest + "}";
+            });
+        }
 
         /// <summary>
         /// Gets the names of any predefined route parameters

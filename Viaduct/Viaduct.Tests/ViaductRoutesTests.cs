@@ -85,7 +85,7 @@ namespace Viaduct.Tests
         {
             await using var app = await CreateServer(o => o.UseRoutePathParameters = true);
 
-            await Assert.That(RoutePatterns(app)).IsEquivalentTo(["/routed/GetByCodeAsync/{code}"]);
+            await Assert.That(RoutePatterns(app)).IsEquivalentTo(["/routed/GetByCodeAsync/{code:int}"]);
         }
     }
 }

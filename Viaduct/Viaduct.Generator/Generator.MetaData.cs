@@ -333,7 +333,8 @@ namespace Viaduct.Generation
                             { IsValueType: true } => QueryValueKind.ValueType,
                             { IsReferenceType: true } => QueryValueKind.ReferenceType,
                             _ => QueryValueKind.Unknown,
-                        });
+                        },
+                        querySafe ? RouteConstraintOf(parameter.Type) : null);
 
                     parameters.Add(paramInfo);
 
@@ -551,6 +552,33 @@ namespace Viaduct.Generation
         {
             return parameter.Type.Name == "CancellationToken"
                 && parameter.Type.ContainingNamespace.ToDisplayString() == "System.Threading";
+        }
+
+        /// <summary>
+        /// The ASP.NET Core route constraint for a parameter of <paramref name="type"/> (<c>guid</c>, <c>int</c>…), or null
+        /// for a type without one that reads a value exactly as the parameter's binding does.
+        /// </summary>
+        /// <remarks>
+        /// Only those whose constraint parses as the binding does, so a value the endpoint would accept is never turned away:
+        /// not dates (the <c>datetime</c> constraint reads more than the client writes, and <c>DateOnly</c> has none), enums or
+        /// a type with a <c>TryParse</c> of its own.
+        /// </remarks>
+        internal static string? RouteConstraintOf(ITypeSymbol type)
+        {
+            if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T, TypeArguments.Length: 1 } nullable)
+                type = nullable.TypeArguments[0];
+
+            return type.SpecialType switch
+            {
+                SpecialType.System_Int32 => "int",
+                SpecialType.System_Int64 => "long",
+                SpecialType.System_Boolean => "bool",
+                SpecialType.System_Decimal => "decimal",
+                SpecialType.System_Double => "double",
+                SpecialType.System_Single => "float",
+                _ when type.ToDisplayString() == "System.Guid" => "guid",
+                _ => null,
+            };
         }
 
         private static readonly Regex HasRouteParametersRegex = new(HasRouteParametersPattern, RegexOptions.Compiled);

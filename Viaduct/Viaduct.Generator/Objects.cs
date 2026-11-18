@@ -188,7 +188,8 @@ namespace Viaduct.Generation
     bool QueryParameter,
     bool IsSimpleType,
     bool IsOptional,
-    QueryValueKind ValueKind = QueryValueKind.Unknown) 
+    QueryValueKind ValueKind = QueryValueKind.Unknown,
+    string? RouteConstraint = null)
     {
 
     }

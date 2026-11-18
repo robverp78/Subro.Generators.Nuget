@@ -124,6 +124,40 @@ namespace Viaduct.Generation
         {
             public const string IncludeEndpointMetadata = nameof(IncludeEndpointMetadata);
             public const string GenerateEndpointNames = nameof(GenerateEndpointNames);
+            public const string UseRouteTypeConstraints = nameof(UseRouteTypeConstraints);
+        }
+
+        /// <summary>
+        /// The code of a dictionary from parameter name to route constraint, names compared without regard to case as the
+        /// route's are (<c>ForceLowerCaseRouteParameters</c>). Null when there are none.
+        /// </summary>
+        static string? ConstraintsCode(IEnumerable<ParameterCreationInfo> parameters)
+        {
+            var entries = parameters
+                .Where(static p => p.QueryParameter && p.RouteConstraint is not null)
+                .Select(static p => "[" + Literal(p.Name) + "] = " + Literal(p.RouteConstraint!))
+                .ToArray();
+
+            return entries.Length == 0
+                ? null
+                : "new global::System.Collections.Generic.Dictionary<string, string>(global::System.StringComparer.OrdinalIgnoreCase) { "
+                    + string.Join(", ", entries) + " }";
+        }
+
+        /// <summary>
+        /// The parameters a base path may name, with a constraint: those every method has, with the same constraint, since
+        /// the base path is the prefix of them all.
+        /// </summary>
+        static IEnumerable<ParameterCreationInfo> BasePathConstraintParameters(InterfaceMetaData info)
+        {
+            var methods = info.Methods.Where(static m => !m.IgnoreForServerGeneration).ToArray();
+            return methods
+                .SelectMany(static m => m.Parameters)
+                .Where(static p => p.QueryParameter)
+                .GroupBy(static p => p.Name, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() == methods.Length
+                    && g.First().RouteConstraint is { } constraint && g.All(p => p.RouteConstraint == constraint))
+                .Select(static g => g.First());
         }
 
         const string mappingMethodName = "Map";
@@ -186,6 +220,15 @@ namespace {{GeneratedNameSpace}}
         {
             options ??= {{serverOptions}}.Default;
             var basePath = {{createGetBasePathCode(info.BasePath, info.Name, info.TypeArgSegment)}};
+""");
+            // The base path is only known at run time (the options can set one), so its parameters are constrained there.
+            if (ConstraintsCode(BasePathConstraintParameters(info)) is { } baseConstraints)
+                sb.Append(@"
+            if(options.").Append(ViaductServerOptionNames.UseRouteTypeConstraints).Append(@" && basePath.IndexOf('{') >= 0)
+                basePath = WithTypeConstraints(basePath, ").Append(baseConstraints).Append(");");
+
+            sb.Append($$"""
+
             var group = app.MapGroup(basePath);
 
             if(options.RequiresAuthorization)
@@ -259,6 +302,13 @@ namespace {{GeneratedNameSpace}}
                     foreach (var param in method.Parameters)
                         sb.Append($@"
                 routeParams.Remove(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)} ? {Literal(param.Name.ToLowerInvariant())} : {Literal(param.Name)});");
+
+                    // Each route parameter with its type, so that two routes of one shape are told apart by it
+                    // (/users/{userId:guid} and /users/{search}) rather than both answering 500 as ambiguous.
+                    if (ConstraintsCode(method.Parameters) is { } constraints)
+                        sb.Append(@"
+                if(options.").Append(ViaductServerOptionNames.UseRouteTypeConstraints).Append(@")
+                    route = WithTypeConstraints(route, ").Append(constraints).Append(");");
                 } //end of parameter loop
 
 

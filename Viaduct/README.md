@@ -180,6 +180,25 @@ Task<User> GetUserAsync(Guid userId, string? include);
 - **Complex types** (classes, records) are bound from the **request body** (`[FromBody]`).
 - **`CancellationToken`** is always forwarded but never serialized.
 
+### Route parameters are typed
+
+The server maps each route parameter with its type as a constraint — in a `[CustomRoute]`, in a base path, and in the
+segments `UseRoutePathParameters` appends — so routes of one shape are told apart by their types:
+
+```csharp
+[CustomRoute("/users/{userId}")]  Task<User> GetUserAsync(Guid userId);           // mapped as /users/{userId:guid}
+[CustomRoute("/users/{search}")]  Task<User[]> FindUsersAsync(string search);     // mapped as /users/{search}
+```
+
+Without the constraint ASP.NET Core ranks the two alike and answers every request to either with a 500 for matching
+both. A value that is not of the type now matches no endpoint and answers 404, where it was a 400.
+
+Only types whose constraint reads a value exactly as the binding does get one: `Guid`, `int`, `long`, `bool`,
+`decimal`, `double`, `float`, and those nullable. Strings, dates, enums and types with their own `TryParse` stay
+unconstrained. A route that gives a parameter a constraint of its own (`{code:min(1)}`) keeps it, and a base path's
+parameter is constrained when every method has it with the same type. The client's paths do not change. Turn it off
+with `UseRouteTypeConstraints = false` in the server options.
+
 ### Route templates for pages and links
 
 Routes that are not API methods, such as an application's pages, can be written once as constants and used everywhere:
@@ -252,6 +271,7 @@ builder.Services.AddScopedAndMap<IUserService, UserService>(options =>
 |---|---|---|
 | `IncludeEndpointMetadata` | `true` | Give each endpoint its tag, summary and description — see [API documentation](#api-documentation) |
 | `GenerateEndpointNames` | `true` | Give each endpoint a name, which is its OpenAPI `operationId` |
+| `UseRouteTypeConstraints` | `true` | Map each route parameter with its type as a constraint — see [Route parameters are typed](#route-parameters-are-typed) |
 
 Endpoint names must be unique across the whole application, and Viaduct only sees one interface at a time. Two
 interfaces declaring the same method name is the case to watch: ASP.NET Core throws at startup. Name one of
