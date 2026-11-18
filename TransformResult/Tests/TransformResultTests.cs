@@ -96,6 +96,67 @@ public class TransformResultTests
         TransformResult<StructInfo> result = default;
 
         await Assert.That(result.IsEmpty).IsTrue();
+        await Assert.That(result.HasResult).IsFalse();
+    }
+
+    [Test]
+    public async Task ADiagnostic_OfAStructResult_HasNoResult()
+    {
+        TransformResult<StructInfo> one = Error;
+        TransformResult<StructInfo> several = ImmutableArray.Create(Error, Warning);
+        var sequence = new TransformResult<StructInfo>(new List<DiagnosticInfo> { Warning });
+
+        await Assert.That(one.HasResult).IsFalse();
+        await Assert.That(several.HasResult).IsFalse();
+        await Assert.That(sequence.HasResult).IsFalse();
+        await Assert.That(one.IsEmpty).IsFalse();
+    }
+
+    /// <summary>For a struct, a result that is given counts, also when it is the struct's default value.</summary>
+    [Test]
+    public async Task AGivenStructResult_Counts_EvenAtItsDefaultValue()
+    {
+        TransformResult<int> zero = 0;
+        var withWarning = new TransformResult<StructInfo>(default(StructInfo), [Warning]);
+
+        await Assert.That(zero.HasResult).IsTrue();
+        await Assert.That(zero.IsEmpty).IsFalse();
+        await Assert.That(withWarning.HasResult).IsTrue();
+    }
+
+    [Test]
+    public async Task ANullClassResult_IsNone()
+    {
+        var result = new TransformResult<string>(null, [Warning]);
+
+        await Assert.That(result.HasResult).IsFalse();
+        await Assert.That(new TransformResult<string>((string?)null!).IsEmpty).IsTrue();
+    }
+
+    [Test]
+    public async Task With_SetsOrClearsTheResult()
+    {
+        TransformResult<StructInfo> error = Error;
+        TransformResult<string> value = "value";
+
+        await Assert.That((error with { Result = new("set") }).HasResult).IsTrue();
+        await Assert.That((value with { Result = null }).HasResult).IsFalse();
+    }
+
+    [Test]
+    public async Task Builder_OfAStruct_HasAResult_OnlyOnceItIsSet()
+    {
+        var builder = Transform.Build<StructInfo>();
+        builder.Diagnostics.Add(Warning);
+
+        var without = builder.GetResult();
+        builder.Result = new StructInfo("set");
+        var with = builder.GetResult();
+
+        await Assert.That(without.HasResult).IsFalse();
+        await Assert.That(with.HasResult).IsTrue();
+        await Assert.That(with.Result.Name).IsEqualTo("set");
+        await Assert.That(builder.FatalError(Error).HasResult).IsFalse();
     }
 
     [Test]

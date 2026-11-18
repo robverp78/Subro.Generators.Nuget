@@ -16,11 +16,42 @@ namespace Subro.Generators
     /// It can have either a Result (T) or Diagnostics, or both, or neither.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// <c>default</c> is a valid result, the one with neither: it is filtered out like any other empty result.
+    /// </para>
+    /// <para>
+    /// <typeparamref name="T"/> may be a class or a struct. Whether there is a result is kept apart from its value
+    /// (<see cref="HasResult"/>), as a struct is never null: a default struct or a result made of diagnostics only does
+    /// not count as one.
+    /// </para>
     /// </remarks>
     public readonly record struct TransformResult<T>(T? Result, ImmutableArray<DiagnosticInfo> Diagnostics)
     {
+        readonly T? result = Result;
+        readonly bool hasResult = Result is not null;
         readonly ImmutableArray<DiagnosticInfo> diagnostics = Diagnostics;
+
+        /// <summary>
+        /// The result, if there is one (<see cref="HasResult"/>).
+        /// </summary>
+        public T? Result
+        {
+            get => result;
+            init
+            {
+                result = value;
+                hasResult = value is not null;
+            }
+        }
+
+        /// <summary>
+        /// Whether there is a result: one was given, and it is not null.
+        /// </summary>
+        /// <remarks>
+        /// For a class the same as <c>Result is not null</c>. For a struct, given is what counts: a struct is never null,
+        /// but <c>default</c> and a result of diagnostics alone have none.
+        /// </remarks>
+        public bool HasResult => hasResult;
 
         /// <summary>
         /// The diagnostics to report; empty, never a default array.
@@ -44,7 +75,11 @@ namespace Subro.Generators
         /// <summary>
         /// Transform result with only Diagnostics and no Result (T).
         /// </summary>
-        public TransformResult(ImmutableArray<DiagnosticInfo> Diagnostics) : this(default, Diagnostics) { }
+        public TransformResult(ImmutableArray<DiagnosticInfo> Diagnostics) : this(default, Diagnostics)
+        {
+            // Also for a struct, whose default is not null.
+            hasResult = false;
+        }
 
         /// <summary>
         /// Transform result with only Diagnostics and no Result (T).
@@ -59,7 +94,7 @@ namespace Subro.Generators
         /// <summary>
         /// Indicates if the TransformResult is empty, meaning it has no Result and no Diagnostics.
         /// </summary>
-        public bool IsEmpty => Result == null && Diagnostics.Length == 0;
+        public bool IsEmpty => !HasResult && Diagnostics.Length == 0;
 
         /// <summary>
         /// Gets a value indicating whether any diagnostics are present.
@@ -67,10 +102,10 @@ namespace Subro.Generators
         public bool HasDiagnostics => Diagnostics.Length > 0;
 
         public static implicit operator TransformResult<T>(in DiagnosticInfo diagnostic)
-            => new (default, ImmutableArray.Create(diagnostic)); //shortcut to return an error
+            => new(ImmutableArray.Create(diagnostic)); //shortcut to return an error
 
         public static implicit operator TransformResult<T>(in ImmutableArray<DiagnosticInfo> diagnostics)
-            => new(default, diagnostics);
+            => new(diagnostics);
 
         public static implicit operator TransformResult<T>(T Result)
             => new(Result, ImmutableArray<DiagnosticInfo>.Empty);
@@ -87,16 +122,28 @@ namespace Subro.Generators
     /// </remarks>
     public class TransformResultBuilder<T>: DiagnosticsContainer
     {
+        T? result;
+        bool hasResult;
+
         /// <summary>
-        /// The resulting metadata for the transformation
+        /// The resulting metadata for the transformation; none until it is set (also for a struct).
         /// </summary>
-        public T? Result { get; set; }
+        public T? Result
+        {
+            get => result;
+            set
+            {
+                result = value;
+                hasResult = value is not null;
+            }
+        }
 
         /// <summary>
         /// Default method to return the transform result. (implicit conversion is also supported)
         /// </summary>
         /// <returns></returns>
-        public TransformResult<T> GetResult() => new(Result, GetDiagnosticInfos());
+        public TransformResult<T> GetResult()
+            => hasResult ? new(result, GetDiagnosticInfos()) : new(GetDiagnosticInfos());
 
         public static implicit operator TransformResult<T>(TransformResultBuilder<T> builder) => builder.GetResult();
 
@@ -137,7 +184,7 @@ namespace Subro.Generators
         /// </summary>
         public static IncrementalValuesProvider<T> GetResults<T>(
             this IncrementalValuesProvider<TransformResult<T>> transformResults)
-            => transformResults.Where(static t => t.Result is not null).Select(static (t, _) => t.Result!);
+            => transformResults.Where(static t => t.HasResult).Select(static (t, _) => t.Result!);
 
         /// <summary>
         /// Combination of <see cref="RegisterDiagnosticsOutput"/> and <see cref="GetResults"/>
@@ -148,7 +195,7 @@ namespace Subro.Generators
             IncrementalGeneratorInitializationContext context)
         {
             context.RegisterDiagnosticsOutput(transformResults);
-            return transformResults.Where(static t => t.Result is not null).Select(static (t, _) => t.Result!);
+            return transformResults.Where(static t => t.HasResult).Select(static (t, _) => t.Result!);
         }
 
         public static IncrementalValuesProvider<T> RegisterDiagnosticsAndReturnResults<T>(
@@ -158,7 +205,7 @@ namespace Subro.Generators
             context.RegisterDiagnosticsOutput( transformResults);
             return transformResults
                 .SelectMany(static (t,_) => 
-                    t.Where(static t => t.Result is not null)
+                    t.Where(static t => t.HasResult)
                     .Select(static (t, _) => t.Result!));
         }
 

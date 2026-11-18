@@ -263,6 +263,14 @@ static TransformResult<MyCreationInfo> Transform(GeneratorAttributeSyntaxContext
 
 All these example cases are a single `return` statement. No builder required for simple transforms.
 
+`T` can be a class or a struct (a `record struct` is a common choice for equatable metadata). Whether there is a
+result is `HasResult`, kept apart from `Result`: for a class it is the same as `Result is not null`, but a struct is
+never null, so for a struct it is whether one was given. `return default;` and a result of diagnostics alone have
+none, so neither reaches your generator; a struct you do return counts, even at its default value.
+
+> Before 1.5.2, results were filtered on `Result is not null`, which a struct always passes: a struct's `return default;`
+> and its errors reached the generator as a default struct. On an older version, use a class for `T`.
+
 ---
 
 ## Diagnostics
@@ -389,7 +397,7 @@ static TransformResult<MyCreationInfo> Transform(GeneratorAttributeSyntaxContext
 ```
 
 The implicit conversion from `TransformResultBuilder<T>` to `TransformResult<T>` means `return builder` works,
-but you can also use the explicit `builder.GetResult()`
+but you can also use the explicit `builder.GetResult()`. Until `Result` is set, there is no result, also for a struct.
 
 ---
 

@@ -60,8 +60,9 @@ namespace Subro.Generators
             => new(descriptor, LocationInfo.None);
 
         #region Equality. overrides equality to compare the message arguments contents (if any)
+        // Through the comparer, as a default info (the empty one) has no descriptor.
         public bool Equals(DiagnosticInfo other)
-            => Descriptor.Equals(other.Descriptor)
+            => EqualityComparer<DiagnosticDescriptor>.Default.Equals(Descriptor, other.Descriptor)
             && Location == other.Location
             && MessageArgsEqual(MessageArgs, other.MessageArgs);
 
