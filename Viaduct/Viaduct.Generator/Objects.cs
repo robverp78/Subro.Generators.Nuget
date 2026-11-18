@@ -30,6 +30,22 @@ namespace Viaduct.Generation
         //[RouteTemplates]
         RouteTemplatesNotStaticPartial = 400,
         RouteLinkNameTaken,
+
+        //[Signals]
+        SignalsNotAPlainInterface = 500,
+        SignalsInvalidPrefix,
+        SignalsMemberNotAMethod,
+        SignalMethodNotValueTask,
+        SignalMethodNotSupported,
+        SignalTopicInvalid,
+        SignalTopicHoleNotFilled,
+        SignalParameterNotInTopic,
+        SignalHoleTypeNotSupported,
+        SignalMoreThanOnePayload,
+        SignalCancellationTokenNotLast,
+        SignalDuplicateKey,
+        SignalDeliveryNeedsTime,
+        SignalWithoutCancellationToken,
     }
 
    
@@ -65,6 +81,34 @@ namespace Viaduct.Generation
         /// for non-generic interfaces. Used to make endpoint/client routes unique per closure.
         /// </summary>
         public string? TypeArgSegment { get; init; }
+
+        /// <summary>
+        /// What <see cref="ViaductRoutesAttribute"/> sets for this interface, its own over its assembly's; null when neither
+        /// has one. Both generated sides start their options from it.
+        /// </summary>
+        public RouteDefaults? RouteDefaults { get; init; }
+    }
+
+    /// <summary>
+    /// The route options a <see cref="ViaductRoutesAttribute"/> sets: a value for each one it names, null for each it
+    /// leaves to the options.
+    /// </summary>
+    public record RouteDefaults(
+        bool? UseRoutePathParameters,
+        bool? ForceLowerCaseRouteParameters,
+        bool? UseInterfaceNameForPath,
+        bool? GenericTypeArgPathFirst)
+    {
+        public static readonly RouteDefaults None = new(null, null, null, null);
+
+        public bool IsEmpty => this == None;
+
+        /// <summary>These, with what <paramref name="over"/> sets taking their place.</summary>
+        public RouteDefaults With(RouteDefaults over) => new(
+            over.UseRoutePathParameters ?? UseRoutePathParameters,
+            over.ForceLowerCaseRouteParameters ?? ForceLowerCaseRouteParameters,
+            over.UseInterfaceNameForPath ?? UseInterfaceNameForPath,
+            over.GenericTypeArgPathFirst ?? GenericTypeArgPathFirst);
     }
 
 

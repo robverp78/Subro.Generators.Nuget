@@ -219,6 +219,24 @@ All options are shared between server and client via `ViaductOptions`, with serv
 | `ForceLowerCaseRouteParameters` | `true` | Normalize parameter names to lowercase in URLs |
 | `RequiresAuthorization` | `false` | Call `RequireAuthorization()` on the endpoint group |
 
+### Route options on the interfaces (`[ViaductRoutes]`)
+
+The route options decide what the paths look like, so the server and the client must agree on them. Rather than set
+them at every registration on both sides, declare them once with the interfaces; both generated sides start from them:
+
+```csharp
+// For every interface in the assembly
+[assembly: ViaductRoutes(UseRoutePathParameters = false)]
+
+// For one interface, over what its assembly says
+[ViaductRoutes(ForceLowerCaseRouteParameters = false)]
+public interface IUserService { ... }
+```
+
+It takes `UseRoutePathParameters`, `ForceLowerCaseRouteParameters`, `UseInterfaceNameForPath` and
+`GenericTypeArgPathFirst`; only the ones it names apply. The order is: the options' defaults, then `[ViaductRoutes]`,
+then a registration's `configure`, which can still change any of it, on its own side only.
+
 ### Server options
 
 ```csharp
@@ -257,6 +275,7 @@ builder.Services.CreateAndAddHttpClient<IUserService>(options =>
 | Attribute | Target | Description |
 |---|---|---|
 | `[BasePath(string path)]` | Interface | Sets the base route for all methods on the interface |
+| `[ViaductRoutes(...)]` | Assembly, interface | The route options both sides start from — see [Route options on the interfaces](#route-options-on-the-interfaces-viaductroutes) |
 | `[CustomRoute(string path)]` | Method | Overrides the default route for that method |
 | `[HttpMethodType(string method)]` | Method | Explicitly sets the HTTP method |
 | `[ViaductIgnore]` | Method | Skips the method for both server and client generation |

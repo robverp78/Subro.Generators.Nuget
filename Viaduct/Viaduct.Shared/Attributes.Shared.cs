@@ -26,6 +26,35 @@ namespace Viaduct
         [StringSyntax(ViaductFunctions.RouteSyntax)] public string Path { get; } = path;
     }
 
+    /// <summary>
+    /// How the routes of an interface are written, as part of its contract: the generated server mapping and the generated
+    /// client both start from this, so they arrive at the same paths without either side being told. On an assembly, for
+    /// every interface declared in it; on an interface, for that one, over what its assembly says.
+    /// </summary>
+    /// <remarks>
+    /// Only the properties set in the attribute apply; the rest stay as the options have them. The order is: the options'
+    /// defaults (<c>ViaductServerOptions.Default</c>, <c>ViaductClientOptions.Default</c>), then this, then the
+    /// <c>configure</c> of a registration, which can still change any of it, on its own side only.
+    /// <code>
+    /// [assembly: ViaductRoutes(UseRoutePathParameters = false)]
+    /// </code>
+    /// </remarks>
+    [AttributeUsage(AttributeTargets.Interface | AttributeTargets.Assembly)]
+    public sealed class ViaductRoutesAttribute : ViaductAttributeBase
+    {
+        /// <inheritdoc cref="ViaductOptions.UseRoutePathParameters"/>
+        public bool UseRoutePathParameters { get; set; }
+
+        /// <inheritdoc cref="ViaductOptions.ForceLowerCaseRouteParameters"/>
+        public bool ForceLowerCaseRouteParameters { get; set; }
+
+        /// <inheritdoc cref="ViaductOptions.UseInterfaceNameForPath"/>
+        public bool UseInterfaceNameForPath { get; set; }
+
+        /// <inheritdoc cref="ViaductOptions.GenericTypeArgPathFirst"/>
+        public bool GenericTypeArgPathFirst { get; set; }
+    }
+
 
 
     /// <summary>    

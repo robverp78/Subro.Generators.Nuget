@@ -1,5 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 using Subro.JsonTypes;
+using System.Collections.Immutable;
 using System.Text;
 using Subro.Generators;
 
@@ -14,17 +15,23 @@ namespace Subro.Generators.Json
             context.RegisterPostInitializationOutput(static ctx => AddGeneralAotTypeRegistration(ctx));
 
 
-            var AotTypes = context.SyntaxProvider.ForAttributeWithMetadataName(
-            $"{JsonTypesNamepace}.{nameof(MarkAsJsonSerializableAttribute)}",
-            static (ctx, _) => true,
-            TransformAttributeType)
-                .Where(static type => type is not null)
-                .Select(static (type,_) => type!);
+            // Only the types that can have a contract come through; the rest are left out by TransformResult.
+            var aotTypes = context.ValuesForAttributeWithMetadataName(
+                $"{JsonTypesNamepace}.{nameof(MarkAsJsonSerializableAttribute)}",
+                static (_, _) => true,
+                TransformAttributeType);
 
-            AddAotTypeRegistration(context, AotTypes);
+            AddAotTypeRegistration(context, aotTypes);
         }
 
-        internal static TypeReference? TransformAttributeType(GeneratorAttributeSyntaxContext ctx, CancellationToken token)
+        /// <summary>Left out without a word: no result, and no diagnostics.</summary>
+        /// <remarks>
+        /// Not <c>default</c>: a default result's diagnostics array is uninitialized, and the pipeline throws when it collects
+        /// one, from inside Roslyn and without naming this generator.
+        /// </remarks>
+        static readonly TransformResult<TypeReference> NoContract = ImmutableArray<DiagnosticInfo>.Empty;
+
+        internal static TransformResult<TypeReference> TransformAttributeType(GeneratorAttributeSyntaxContext ctx, CancellationToken token)
         {
             var target = ctx.TargetSymbol;
 
@@ -38,7 +45,7 @@ namespace Subro.Generators.Json
             // A type parameter (or a type built from one) has no contract until it is known, void has none at all, and an
             // error type is the compiler's to report.
             if (typeSymbol is null or IErrorTypeSymbol || typeSymbol.SpecialType == SpecialType.System_Void || ContainsTypeParameter(typeSymbol))
-                return null;
+                return NoContract;
 
             // Fully qualified, keywords kept: typeof(int?) and typeof(global::System.Collections.Generic.List<global::My.Sample>).
             return new TypeReference(typeSymbol.Name, typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));

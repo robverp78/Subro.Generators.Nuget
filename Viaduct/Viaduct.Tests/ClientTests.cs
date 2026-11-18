@@ -123,6 +123,55 @@ namespace Viaduct.Tests
             await Assert.That(output).IsEqualTo(expected ?? Path);
         }
 
+        /// <summary>
+        /// A call that returns nothing still reads its answer to the end before disposing it: in a browser, disposing a
+        /// streamed answer unread aborts its fetch, and the call shows as failed although it succeeded.
+        /// </summary>
+        [Test]
+        public async Task Client_ReadsTheAnswerToItsEnd_ForACallThatReturnsNothing()
+        {
+            var answer = new WatchedStream("{\"done\":true}"u8.ToArray());
+            var services = new ServiceCollection();
+            services.CreateAndAddHttpClient<IViaductTestInterface>(o =>
+            {
+                o.UseInterfaceNameForPath = true;
+                o.BaseUrl = "http://viaduct.test/";
+            }).ConfigurePrimaryHttpMessageHandler(() => new AnswerWith(answer));
+            await using var provider = services.BuildServiceProvider();
+
+            await provider.GetRequiredService<IViaductTestInterface>().ExecuteAsync();
+
+            await Assert.That(answer.ReadToEnd).IsTrue();
+        }
+
+        /// <summary>A stream that says whether it was read to its end.</summary>
+        private sealed class WatchedStream(byte[] content) : MemoryStream(content)
+        {
+            public bool ReadToEnd { get; private set; }
+
+            public override int Read(byte[] buffer, int offset, int count) => Note(base.Read(buffer, offset, count));
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+                => Note(await base.ReadAsync(buffer, cancellationToken));
+
+            public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+                => Note(await base.ReadAsync(buffer, offset, count, cancellationToken));
+
+            private int Note(int read)
+            {
+                if (read == 0)
+                    ReadToEnd = true;
+                return read;
+            }
+        }
+
+        /// <summary>Answers every call with 200 and <paramref name="body"/>, as a server would.</summary>
+        private sealed class AnswerWith(Stream body) : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+                => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StreamContent(body), RequestMessage = request });
+        }
+
         [Test]
         public async Task Client_ThrowsViaductException_On404Response()
         {

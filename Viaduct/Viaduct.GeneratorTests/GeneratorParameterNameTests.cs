@@ -49,7 +49,7 @@ namespace Viaduct.Tests
                     void Configure(IServiceCollection services)
                     {
                         services.CreateAndAddHttpClient<INamesApi>();
-                        ServerMappings.RegisterEndpoints<INamesApi>();
+                        services.RegisterEndpoints<INamesApi>();
                     }
                 }
             }
@@ -60,7 +60,7 @@ namespace Viaduct.Tests
         {
             var compilation = RunFullPipeline(Source);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error
                 && !d.ToString().Contains("Viaduct_AotTypes"))
                 .ToArray();

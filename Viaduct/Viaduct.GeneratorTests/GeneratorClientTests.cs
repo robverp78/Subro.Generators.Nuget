@@ -30,7 +30,7 @@ namespace Viaduct.Tests
 
             var compilation = CreateClientCompilation(generatedCode, helperFunctions, stubSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .ToArray();
 
@@ -56,7 +56,7 @@ namespace Viaduct.Tests
 
             var compilation = CreateClientCompilation(generatedCode, helperFunctions, stubSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .ToArray();
 
@@ -89,7 +89,7 @@ namespace Viaduct.Tests
 
             var compilation = CreateClientCompilation(generatedCode, helperFunctions, stubSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .ToArray();
 
@@ -114,7 +114,7 @@ namespace Viaduct.Tests
 
             var compilation = CreateClientCompilation(generatedCode, helperFunctions, stubSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .ToArray();
 
@@ -148,7 +148,7 @@ namespace Viaduct.Tests
 
             var compilation = CreateClientCompilation(generatedCode, helperFunctions, stubSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .ToArray();
 

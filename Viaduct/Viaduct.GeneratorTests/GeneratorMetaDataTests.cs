@@ -400,5 +400,43 @@ public interface ITestApi
         }
 
         #endregion
+
+        #region ViaductRoutes
+
+        /// <summary>
+        /// The assembly's [ViaductRoutes] applies to every interface in it, and an interface's own sets what it names over
+        /// that. What neither names stays null: no statement, so the options keep their own value.
+        /// </summary>
+        [Test]
+        public async Task ViaductRoutes_TheInterfacesOwn_OverTheAssemblys()
+        {
+            var code = """
+[assembly: ViaductRoutes(UseRoutePathParameters = false, ForceLowerCaseRouteParameters = false)]
+
+[ViaductRoutes(ForceLowerCaseRouteParameters = true)]
+public interface IOwnApi { Task Get(int id); }
+
+public interface IAssemblyApi { Task Get(int id); }
+""";
+            var compilation = CreateModel(code);
+
+            var own = ViaductGeneratorFunctions.CreateInterfaceMetaData(compilation.GetSymbol("IOwnApi")!).Result!.RouteDefaults;
+            var fromAssembly = ViaductGeneratorFunctions.CreateInterfaceMetaData(compilation.GetSymbol("IAssemblyApi")!).Result!.RouteDefaults;
+
+            await Assert.That(own).IsEqualTo(new RouteDefaults(false, true, null, null));
+            await Assert.That(fromAssembly).IsEqualTo(new RouteDefaults(false, false, null, null));
+        }
+
+        [Test]
+        public async Task WithoutViaductRoutes_ThereAreNoRouteDefaults()
+        {
+            var compilation = CreateModel("public interface IPlainApi { Task Get(int id); }");
+
+            var result = ViaductGeneratorFunctions.CreateInterfaceMetaData(compilation.GetSymbol("IPlainApi")!);
+
+            await Assert.That(result.Result!.RouteDefaults).IsNull();
+        }
+
+        #endregion
     }
 }

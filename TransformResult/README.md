@@ -81,6 +81,10 @@ static TransformResult<YourMetaDataObject> TransformFunction(GeneratorSyntaxCont
 
 So in short: if `default` (empty) is returned, it will be filtered out automatically.
 If diagnostics are returned, they are handled in their own path.
+
+> Before 1.5.2, `return default;` threw inside the pipeline (`ArgumentNullException`, Parameter 'many'), because a
+> default result's diagnostics array was uninitialized. On an older version, return
+> `ImmutableArray<DiagnosticInfo>.Empty` instead.
 The end result is only the valid objects.
 
 For returning multiple TransformResults, see [this section](#return-multiple-transform-results)

@@ -66,8 +66,16 @@ using Microsoft.AspNetCore.Routing;
             return compiler.Create(source);
         }
 
-        protected static TestCompilation CreateModel(string source) 
+        protected static TestCompilation CreateModel(string source)
             => createCompiler().Create(BaseSource + source);
+
+        /// <summary>
+        /// Everything the generators and the compiler report, including what the compiler reports only when it emits:
+        /// whether an interceptor fits the call it intercepts (CS9144) is checked then, so code that passes
+        /// <c>GetDiagnostics</c> can still fail to build.
+        /// </summary>
+        protected static IEnumerable<Diagnostic> AllDiagnostics(TestCompilation compilation)
+            => compilation.Diagnostics.Concat(compilation.Compilation.Emit(Stream.Null).Diagnostics);
 
 
 

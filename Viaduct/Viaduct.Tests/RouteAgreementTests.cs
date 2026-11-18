@@ -217,6 +217,35 @@ namespace Viaduct.Tests
             await Assert.That(test.LastCall()).IsEqualTo(("GET", $"/public/users/{userId}?search=smith"));
         }
 
+        /// <summary>
+        /// Route parameters are lower-cased the same way everywhere: invariantly. Lower-cased by a Turkish culture,
+        /// <c>userId</c> is <c>userıd</c>, which the generated mapping (lower-cased invariantly) did not know, so the server
+        /// refused to map the route at all.
+        /// </summary>
+        [Test]
+        [Arguments(true)]
+        [Arguments(false)]
+        public async Task CustomRoute_WithRouteParameter_UnderATurkishCulture(bool useRoutePathParameters)
+        {
+            var (culture, uiCulture) = (System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CultureInfo.CurrentUICulture);
+            System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.CurrentUICulture
+                = System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+            try
+            {
+                await Assert.That("userId".ToLower()).IsNotEqualTo("userid"); // the culture is in effect
+
+                await using var test = await CreateTestApp(useRoutePathParameters);
+                var userId = Guid.NewGuid();
+
+                await Assert.That((await test.Client.GetUserAsync(userId, "smith")).Value).IsEqualTo($"{userId}|smith");
+                await Assert.That(test.LastCall()).IsEqualTo(("GET", $"/public/users/{userId}?search=smith"));
+            }
+            finally
+            {
+                (System.Globalization.CultureInfo.CurrentCulture, System.Globalization.CultureInfo.CurrentUICulture) = (culture, uiCulture);
+            }
+        }
+
         [Test]
         [Arguments(true)]
         [Arguments(false)]

@@ -41,9 +41,9 @@ namespace Viaduct.Tests
 
                 class Startup
                 {
-                    void Configure()
+                    void Configure(IServiceCollection services)
                     {
-                        ServerMappings.RegisterEndpoints<IUserApi>();
+                        services.RegisterEndpoints<IUserApi>();
                     }
                 }
             }
@@ -56,7 +56,7 @@ namespace Viaduct.Tests
         {
             var compilation = RunFullPipeline(AsyncInterfaceSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error
                 && !d.ToString().Contains("Viaduct_AotTypes"))
                 .ToArray();
@@ -103,16 +103,16 @@ namespace Viaduct.Tests
 
                 class GlobalStartup
                 {
-                    void Configure()
+                    void Configure(IServiceCollection services)
                     {
-                        ServerMappings.RegisterEndpoints<IGlobalApi>();
+                        services.RegisterEndpoints<IGlobalApi>();
                     }
                 }
                 """;
 
             var compilation = RunFullPipeline(source);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error
                 && !d.ToString().Contains("Viaduct_AotTypes"))
                 .ToArray();
@@ -149,9 +149,9 @@ namespace Viaduct.Tests
 
                     class BrokenStartup
                     {
-                        void Configure()
+                        void Configure(IServiceCollection services)
                         {
-                            ServerMappings.RegisterEndpoints<IBrokenApi>();
+                            services.RegisterEndpoints<IBrokenApi>();
                         }
                     }
                 }
@@ -189,9 +189,9 @@ namespace Viaduct.Tests
 
                     class DocumentedStartup
                     {
-                        void Configure()
+                        void Configure(IServiceCollection services)
                         {
-                            ServerMappings.RegisterEndpoints<IDocumentedApi>();
+                            services.RegisterEndpoints<IDocumentedApi>();
                         }
                     }
                 }
@@ -246,9 +246,9 @@ namespace Viaduct.Tests
 
                     class Startup
                     {
-                        void Configure()
+                        void Configure(IServiceCollection services)
                         {
-                            ServerMappings.RegisterEndpoints<IMixedApi>();
+                            services.RegisterEndpoints<IMixedApi>();
                         }
                     }
                 }
@@ -281,9 +281,9 @@ namespace Viaduct.Tests
 
                     class Startup
                     {
-                        void Configure()
+                        void Configure(IServiceCollection services)
                         {
-                            ServerMappings.RegisterEndpoints<IPartialAsyncApi>();
+                            services.RegisterEndpoints<IPartialAsyncApi>();
                         }
                     }
                 }
@@ -294,6 +294,101 @@ namespace Viaduct.Tests
             // Warnings emitted but code still generated
             await Assert.That(result.Diagnostics).Contains(d => d.Id == ViaductErrors.NotAnAsyncMethod.GetCode());
             await Assert.That(result.GeneratorResults.FirstOrDefault()?.GeneratedTrees ?? []).IsNotEmpty();
+        }
+
+        /// <summary>
+        /// A method that is not awaitable but takes a token is warned against, not refused, so its client has to build.
+        /// It used to wait on the configured task with <c>Wait(, token)</c>: an argument missing, on a type without Wait.
+        /// </summary>
+        [Test]
+        public async Task NonAsyncMethodWithCancellationToken_ClientAndServerCompile()
+        {
+            const string source = Usings + """
+                using System.Threading;
+                using Viaduct.Client;
+
+                namespace TestApp
+                {
+                    public interface ISyncApi
+                    {
+                        string GetName(int id, CancellationToken cancellationToken);
+                        void Touch(int id, CancellationToken cancellationToken);
+                    }
+
+                    class Startup
+                    {
+                        void Configure(IServiceCollection services)
+                        {
+                            services.RegisterEndpoints<ISyncApi>();
+                            services.CreateAndAddHttpClient<ISyncApi>();
+                        }
+                    }
+                }
+                """;
+
+            var compiler = createCompiler();
+            compiler.CheckErrors = false;
+            compiler.IncrementalGenerators.Add(new ViaductGenerator());
+            var compilation = compiler.Create(source);
+
+            var errors = AllDiagnostics(compilation)
+                .Where(d => d.Severity == DiagnosticSeverity.Error && !d.ToString().Contains("Viaduct_AotTypes"))
+                .ToArray();
+
+            await Assert.That(errors).IsEmpty();
+            await Assert.That(compilation.Diagnostics).Contains(d => d.Id == ViaductErrors.NotAnAsyncMethod.GetCode());
+        }
+
+        /// <summary>
+        /// [ViaductRoutes] reaches both generated sides: each starts its options from it, before a registration's configure.
+        /// </summary>
+        [Test]
+        public async Task ViaductRoutes_ReachesTheServerAndTheClient_AndCompiles()
+        {
+            const string source = Usings + """
+                using System.Threading;
+                using Viaduct.Client;
+
+                [assembly: ViaductRoutes(UseRoutePathParameters = false)]
+
+                namespace TestApp
+                {
+                    public interface IRoutedApi
+                    {
+                        Task<int> GetByCodeAsync(int code, CancellationToken cancellationToken = default);
+                    }
+
+                    class Startup
+                    {
+                        void Configure(IServiceCollection services, IEndpointRouteBuilder app)
+                        {
+                            services.RegisterEndpoints<IRoutedApi>();
+                            app.AddEndpoints<IRoutedApi>();
+                            services.CreateAndAddHttpClient<IRoutedApi>();
+                        }
+                    }
+                }
+                """;
+
+            var compiler = createCompiler();
+            compiler.CheckErrors = false;
+            compiler.IncrementalGenerators.Add(new ViaductGenerator());
+            var compilation = compiler.Create(source);
+
+            var errors = AllDiagnostics(compilation)
+                .Where(d => d.Severity == DiagnosticSeverity.Error && !d.ToString().Contains("Viaduct_AotTypes"))
+                .ToArray();
+            await Assert.That(errors).IsEmpty();
+
+            var generated = compilation.GeneratorResults.SelectMany(static g => g.Results).SelectMany(static r => r.GeneratedSources).ToArray();
+            var server = generated.Single(static s => s.HintName.Contains("IRoutedApi_ServerMapping")).SourceText.ToString();
+            var client = generated.Single(static s => s.HintName.Contains("IRoutedApi_ClientMapping")).SourceText.ToString();
+
+            foreach (var side in new[] { server, client })
+                await Assert.That(side).Contains("options.UseRoutePathParameters = false;");
+            await Assert.That(server).Contains("PendingMappers.Push(services, Map, WithRouteDefaults(configure));");
+            await Assert.That(server).Contains("Map(app, WithRouteDefaults(configure).GetOptionsInstance())");
+            await Assert.That(client).Contains("configure = WithRouteDefaults(configure);");
         }
 
         private const string GenericCrudSource = Usings + """
@@ -314,10 +409,10 @@ namespace Viaduct.Tests
 
                 class Startup
                 {
-                    void Configure()
+                    void Configure(IServiceCollection services)
                     {
-                        ServerMappings.RegisterEndpoints<ICrudGuid<AddressRecord>>();
-                        ServerMappings.RegisterEndpoints<ICrudGuid<PersonRecord>>();
+                        services.RegisterEndpoints<ICrudGuid<AddressRecord>>();
+                        services.RegisterEndpoints<ICrudGuid<PersonRecord>>();
                     }
                 }
             }
@@ -350,7 +445,7 @@ namespace Viaduct.Tests
         {
             var compilation = RunFullPipeline(GenericCrudSource);
 
-            var errors = compilation.Diagnostics
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error
                 && !d.ToString().Contains("Viaduct_AotTypes"))
                 .ToArray();
@@ -375,9 +470,9 @@ namespace Viaduct.Tests
 
                     class Startup
                     {
-                        void Configure()
+                        void Configure(IServiceCollection services)
                         {
-                            ServerMappings.RegisterEndpoints<IPartialServerApi>();
+                            services.RegisterEndpoints<IPartialServerApi>();
                         }
                     }
                 }

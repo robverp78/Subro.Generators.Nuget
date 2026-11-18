@@ -165,22 +165,11 @@ namespace Viaduct.Server
         /// <summary>
         /// Dummy class to check if the json services have been added to the specific services collection before
         /// </summary>
-        sealed class ViaductJsonTypesMarker { }       
-        
+        sealed class ViaductJsonTypesMarker { }
 
-
-        /// <summary>
-        /// An optional way to Register the endpoints instead of adding them directly (<see cref="AddEndpoints"/>) or via the Add...AndMap functions. 
-        /// This allows registation for later mapping. This is mainly meant for 
-        /// NB: <see cref="AddRegisteredEndpoints"/> must be called on the app/route builder to actually create the mappings for endpoints registered this way.
-        /// </summary>            
-        /// <param name="configure">optional configuration for the endpoints, such as base path and authorization requirements.</param>        
-        public static void RegisterEndpoints<TInterface>(Action<ViaductServerOptions>? configure = null)
-        {
-            throw new ViaductMethodNotInterceptedException();
-        }
-
-
+        // A RegisterEndpoints<TInterface>() without a service collection used to stand here. It could not be intercepted (the
+        // generated interceptor takes the services, CS9144), and registrations now live in the service collection, so
+        // services.RegisterEndpoints<TInterface>() is the one.
 
 
         extension(IEndpointRouteBuilder app)
@@ -241,15 +230,32 @@ namespace Viaduct.Server
     /// Stores endpoint mappers registered during service registration to be applied to an application's
     /// IEndpointRouteBuilder later.
     /// </summary>
-    /// <remarks>Intended for use from generated code. Push queues a ViaductEndpointMapper with optional
-    /// ViaductServerOptions during service registration; AddRegisteredEndpoints applies queued mappers when building
-    /// the web application. Thread-safe and uses a LIFO stack. The Count property exposes the current number of pending
-    /// mappers.</remarks>
+    /// <remarks>
+    /// Intended for use from generated code. <see cref="Push"/> queues a mapper in the service collection it registers on;
+    /// AddRegisteredEndpoints maps that application's mappers, in the order they were registered, and each once.
+    /// <para>
+    /// Kept in the service collection rather than in a static, so that two applications in one process (test hosts, say)
+    /// each map their own endpoints: with one queue for the process, the first to map took every application's endpoints
+    /// and the rest got none.
+    /// </para>
+    /// </remarks>
     public static class PendingMappers
     {
-        internal record PendingMapper(ViaductEndpointMapper Mapper, ViaductServerOptions Options);
+        internal sealed record PendingMapper(ViaductEndpointMapper Mapper, ViaductServerOptions Options);
 
-        static readonly ConcurrentStack<PendingMapper> stack = [];
+        /// <summary>The mappers one service collection registered, kept in it as a singleton.</summary>
+        internal sealed class Registrations
+        {
+            // A queue: mapped in the order they were registered, and each taken once.
+            readonly ConcurrentQueue<PendingMapper> pending = new();
+
+            internal void Add(PendingMapper mapper) => pending.Enqueue(mapper);
+
+            /// <summary>The next mapper not mapped yet, in the order they were registered; it is not handed out again.</summary>
+            internal bool TryTake([NotNullWhen(true)] out PendingMapper? mapper) => pending.TryDequeue(out mapper);
+
+            internal int Count => pending.Count;
+        }
 
         /// <summary>
         /// Maps Viaduct server endpoints onto an IEndpointRouteBuilder.
@@ -261,26 +267,54 @@ namespace Viaduct.Server
         public delegate void ViaductEndpointMapper(IEndpointRouteBuilder builder, ViaductServerOptions options);
 
         /// <summary>
-        /// Meant to be used from the generated code. Add mappings of an interface during service registration phase, to be added to the web app later.
-        /// </summary>        
-        public static void Push(ViaductEndpointMapper mapper, Action<ViaductServerOptions>? configure = null)
+        /// Meant to be used from the generated code. Adds the mappings of an interface to <paramref name="services"/> during
+        /// the service registration phase, to be added to the web app built from them later.
+        /// </summary>
+        public static void Push(IServiceCollection services, ViaductEndpointMapper mapper, Action<ViaductServerOptions>? configure = null)
         {
-            stack.Push(new PendingMapper(mapper, configure.GetOptionsInstance()));
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(mapper);
+            RegistrationsOf(services).Add(new PendingMapper(mapper, configure.GetOptionsInstance()));
+        }
+
+        /// <summary>The number of mappers registered on <paramref name="services"/> and not mapped yet.</summary>
+        public static int Count(IServiceCollection services)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            return Find(services)?.Count ?? 0;
+        }
+
+        static Registrations RegistrationsOf(IServiceCollection services)
+        {
+            if (Find(services) is { } existing)
+                return existing;
+
+            var created = new Registrations();
+            services.AddSingleton(created);
+            return created;
+        }
+
+        static Registrations? Find(IServiceCollection services)
+        {
+            foreach (var descriptor in services)
+            {
+                // A keyed descriptor throws when asked for its ImplementationInstance; ours is never keyed.
+                if (descriptor.ServiceType == typeof(Registrations) && !descriptor.IsKeyedService
+                    && descriptor.ImplementationInstance is Registrations registrations)
+                    return registrations;
+            }
+            return null;
         }
 
         internal static IEndpointRouteBuilder AddRegisteredEndpoints(IEndpointRouteBuilder app)
         {
-            while (stack.TryPop(out var mapping))
-                mapping!.Mapper(app, mapping.Options);
+            if (app.ServiceProvider.GetService<Registrations>() is not { } registrations)
+                return app;
+
+            while (registrations.TryTake(out var mapping))
+                mapping.Mapper(app, mapping.Options);
             return app;
         }
-
-        /// <summary>
-        /// The number of pending mappers
-        /// </summary>
-        public static int Count => stack.Count;
-
-
     }
 
 

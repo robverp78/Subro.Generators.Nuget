@@ -33,7 +33,7 @@ namespace Viaduct.Tests
                     void Configure(IServiceCollection services)
                     {
                         services.CreateAndAddHttpClient<IFindApi>();
-                        ServerMappings.RegisterEndpoints<IFindApi>();
+                        services.RegisterEndpoints<IFindApi>();
                     }
                 }
             }
@@ -46,7 +46,7 @@ namespace Viaduct.Tests
         {
             var compilation = RunFullPipeline(Source);
 
-            var errors = compilation.Compilation.GetDiagnostics()
+            var errors = AllDiagnostics(compilation)
                 .Where(d => d.Severity == DiagnosticSeverity.Error && !d.ToString().Contains("Viaduct_AotTypes"))
                 .ToArray();
             await Assert.That(errors).IsEmpty();

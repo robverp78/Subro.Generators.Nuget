@@ -16,6 +16,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <!-- Shared source: compiled into this generator, nothing shipped with it. -->
+    <PackageReference Include="Subro.Generators.TransformResult" Version="1.5.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <Import Project="..\Subro.Json.Shared\Subro.Json.Shared.projitems" Label="Shared" />

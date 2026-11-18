@@ -179,6 +179,42 @@ namespace {{GeneratedNameSpace}}
         internal static string createGetBasePathCode(string? basePath, string interfaceName, string? typeArgSegment = null, string optionsName = "options")
             => $"{HelperFunctionsClass}.{getBasePathFunctionName}({optionsName}, {(basePath is null ? "null" : $"\"{basePath}\"")}, \"{interfaceName}\", {(typeArgSegment is null ? "null" : $"\"{typeArgSegment}\"")})";
 
+        /// <summary>
+        /// Writes <c>WithRouteDefaults</c> into one side's generated class: a registration's <c>configure</c>, with what the
+        /// interface's <see cref="ViaductRoutesAttribute"/> sets applied first. Both sides write it from the same metadata,
+        /// so they start from the same routes. Without the attribute it hands the configure back as it is.
+        /// </summary>
+        internal static StringBuilder AppendWithRouteDefaults(this StringBuilder sb, InterfaceMetaData info, string optionsType)
+        {
+            sb.Append(@"
+        /// <summary>The registration's configure, after what [ViaductRoutes] says for this interface.</summary>
+        static Action<").Append(optionsType).Append(">? WithRouteDefaults(Action<").Append(optionsType).Append(">? configure)");
+
+            if (info.RouteDefaults is not { } defaults)
+                return sb.AppendLine(" => configure;");
+
+            sb.Append(@"
+            => options =>
+            {");
+
+            void Set(string name, bool? value)
+            {
+                if (value is bool set)
+                    sb.Append(@"
+                options.").Append(name).Append(" = ").Append(set ? "true" : "false").Append(';');
+            }
+
+            Set(nameof(ViaductOptions.UseRoutePathParameters), defaults.UseRoutePathParameters);
+            Set(nameof(ViaductOptions.ForceLowerCaseRouteParameters), defaults.ForceLowerCaseRouteParameters);
+            Set(nameof(ViaductOptions.UseInterfaceNameForPath), defaults.UseInterfaceNameForPath);
+            Set(nameof(ViaductOptions.GenericTypeArgPathFirst), defaults.GenericTypeArgPathFirst);
+
+            return sb.Append(@"
+                configure?.Invoke(options);
+            };
+");
+        }
+
 
     }
 

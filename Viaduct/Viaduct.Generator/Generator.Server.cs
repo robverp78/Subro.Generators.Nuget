@@ -54,7 +54,7 @@ namespace Viaduct.Generation
                 {"RegisterEndpoints", 
                     $"           public static IServiceCollection RegisterEndpoints<TInterface>(this IServiceCollection services, Action<{serverOptions}>? configure = null) => Register(services, configure);"},
                 {"AddEndpoints", 
-                    $"          public static IEndpointRouteBuilder AddEndpoints<TInterface>(this IEndpointRouteBuilder app, Action<{serverOptions}>? configure = null){{ {mappingMethodName}(app, configure.GetOptionsInstance()); return app; }}"},
+                    $"          public static IEndpointRouteBuilder AddEndpoints<TInterface>(this IEndpointRouteBuilder app, Action<{serverOptions}>? configure = null){{ {mappingMethodName}(app, WithRouteDefaults(configure).GetOptionsInstance()); return app; }}"},
             };
         }        
 
@@ -163,11 +163,12 @@ namespace {{GeneratedNameSpace}}
         public static IServiceCollection Register(IServiceCollection services, Action<{{serverOptions}}>? configure = null)
         {            
             services.AddJsonTypeResolvers();
-            PendingMappers.Push({{mappingMethodName}},configure);  
+            PendingMappers.Push(services, {{mappingMethodName}}, WithRouteDefaults(configure));
             return services;
         }
 
 """);
+            sb.AppendWithRouteDefaults(info, serverOptions);
             //append interceptors
             foreach(var methodGroup in callerMethods.GroupBy(m => m.Name))
             {
@@ -206,7 +207,7 @@ namespace {{GeneratedNameSpace}}
                 var methodRouteParams = GetRouteParameters(route).ToList();
                 var paramEnumerable = baseRouteParams.Concat(methodRouteParams);
                 if(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)})
-                    paramEnumerable = paramEnumerable.Select(name=>name.ToLower());
+                    paramEnumerable = paramEnumerable.Select(name=>name.ToLowerInvariant());
                 var routeParams =  new HashSet<string>(paramEnumerable);
 ;");
                 if (method.Parameters.Length > 0)
@@ -232,7 +233,7 @@ namespace {{GeneratedNameSpace}}
                     void AppendRouteParameter(string parameterName, bool optional)
                     {{                        
                         if(options.{nameof(ViaductOptions.ForceLowerCaseRouteParameters)})
-                            parameterName = parameterName.ToLower();
+                            parameterName = parameterName.ToLowerInvariant();
                         if(routeParams.Contains(parameterName)) return;  //parameter was defined in predefined route, do not add again
                         sbMethod.Append(""/{{"").Append(parameterName).Append(optional ? ""?}}"" : ""}}"");
                     }}

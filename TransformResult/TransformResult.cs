@@ -15,8 +15,27 @@ namespace Subro.Generators
     /// along with any diagnostics that should be emitted.
     /// It can have either a Result (T) or Diagnostics, or both, or neither.
     /// </summary>
+    /// <remarks>
+    /// <c>default</c> is a valid result, the one with neither: it is filtered out like any other empty result.
+    /// </remarks>
     public readonly record struct TransformResult<T>(T? Result, ImmutableArray<DiagnosticInfo> Diagnostics)
     {
+        readonly ImmutableArray<DiagnosticInfo> diagnostics = Diagnostics;
+
+        /// <summary>
+        /// The diagnostics to report; empty, never a default array.
+        /// </summary>
+        /// <remarks>
+        /// A <c>default</c> result (what <c>return default;</c> gives) leaves the array uninitialized, which the incremental
+        /// pipeline used to throw on as soon as it collected the diagnostics: an <c>ArgumentNullException</c> from inside
+        /// Roslyn (Parameter 'many'), naming neither the generator nor the file. Read through here, it is simply empty.
+        /// </remarks>
+        public ImmutableArray<DiagnosticInfo> Diagnostics
+        {
+            get => diagnostics.IsDefault ? ImmutableArray<DiagnosticInfo>.Empty : diagnostics;
+            init => diagnostics = value;
+        }
+
         /// <summary>
         /// Transform result with only a Result (T) and no diagnostics.
         /// </summary>

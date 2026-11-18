@@ -112,7 +112,7 @@ namespace Viaduct.Client.UrlBuilding
                 string PathAndMethod = BasePath.EndsWith('/') || MethodPath.StartsWith('/') ? BasePath + MethodPath : BasePath + "/" + MethodPath;                
                 var matches = GetRouteParametersRegex().Matches(PathAndMethod);
                 if (options.ForceLowerCaseRouteParameters)
-                    MethodParameters = MethodParameters.Select(static s => s.ToLower());
+                    MethodParameters = MethodParameters.Select(static s => s.ToLowerInvariant());
                 var parameters = MethodParameters.ToList();
 
                 if (matches.Count == 0 && parameters.Count == 0)

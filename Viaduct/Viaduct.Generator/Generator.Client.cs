@@ -166,6 +166,9 @@ namespace {GeneratedNameSpace}
                     sb.Append(@"
         public static IHttpClientBuilder AddMappedHttpClient(this IServiceCollection services, ").AppendConfigureArg().Append(@")
         {
+            // What the interface's [ViaductRoutes] says comes first: the server's mapping starts from the same.
+            configure = WithRouteDefaults(configure);
+
             // Once for the registration, shared by every client it makes.
             var routes = new ").Append(ClassName).Append('.').Append(RoutesClass).Append(@"(configure.GetOptionsInstance());
             return services.AddHttpClient<").Append(info.FullyQualifiedName).Append(", ").Append(ClassName).Append(@">(client =>
@@ -175,6 +178,7 @@ namespace {GeneratedNameSpace}
                     return new ").Append(ClassName).Append(@"(client, routes);
                 }).AddViaductAuthorization(configure);
         }
+").AppendWithRouteDefaults(info, clientOptions).Append(@"
     }");
                 }
 
@@ -410,11 +414,11 @@ namespace {GeneratedNameSpace}
                         {
                             //not an awaitable, warned against in the compilation, but not disallowed completely
                             //force waiting for result....
+                            // GetResult blocks until the answer is in, and the token is already SendAsync's, so nothing waits
+                            // on the task first: a configured awaitable has no Wait, and the call generated for a method with
+                            // a token did not compile.
                             sb.Append(@"
             #warning ").Append(ViaductErrors.NotAnAsyncMethod).Append(": Method ").Append(method.Name).Append(" on interface ").Append(info.Name).Append(" is not awaitable. Waiting for the I/O result might lead to deadlocks. Consider changing the method to Task or ValueTask");
-                            if (method.Info.CancellationToken != null)
-                                sb.Append(@"
-            __responseTask.Wait(").AppendCancellationTokenArg(method).Append(@");");
                             sb.Append(@"
             using var __response = __responseTask.GetAwaiter().GetResult();");
 
@@ -431,6 +435,19 @@ namespace {GeneratedNameSpace}
                             sb.Append("ExtractResult<")
                                 .Append((mi.InnerReturnType ?? mi.ReturnType).FullName)
                                 .Append(">(__response").AppendCancellationTokenArg(method);
+                            if (mi.IsAsync) sb.AppendLine(");");
+                            else sb.AppendLine(").GetAwaiter().GetResult();");
+                        }
+                        else
+                        {
+                            // Nothing to return, but the answer is read to its end before it is disposed: disposing it
+                            // unread aborts a browser's streamed fetch, which reports the finished call as failed.
+                            sb.Append(@"
+            ");
+                            if (mi.IsAsync)
+                                sb.Append("await ");
+
+                            sb.Append("DrainResponse(__response").AppendCancellationTokenArg(method);
                             if (mi.IsAsync) sb.AppendLine(");");
                             else sb.AppendLine(").GetAwaiter().GetResult();");
                         }
@@ -507,7 +524,7 @@ namespace {GeneratedNameSpace}
                         foreach (var par in method.QueryParameters)
                         {
                             sb.Append(@"
-                            """).Append(ToLowerCase ? par.Name.ToLower() : par.Name).Append("\" => ");
+                            """).Append(ToLowerCase ? par.Name.ToLowerInvariant() : par.Name).Append("\" => ");
                             // A null value is left out of the query rather than sent empty ("on="), which a server
                             // cannot bind to a nullable value type: answering null with nothing appended drops the name.
                             // Tested only as the type allows, without boxing; a Nullable<T> is unwrapped so that the

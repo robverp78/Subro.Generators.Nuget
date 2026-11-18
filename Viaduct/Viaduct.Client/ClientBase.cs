@@ -82,9 +82,9 @@ namespace Viaduct.Client
         /// what tells a permission refusal from a missing record.
         /// </exception>
         /// <exception cref="ViaductException">The request never got an answer that could be read.</exception>
-        protected async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct = default)
+        protected async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken = default)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Kept before sending: the request is disposed along with the response, and these two are what the
             // exception message needs. The address is written out only for that message, not on every call.
@@ -94,9 +94,9 @@ namespace Viaduct.Client
             HttpResponseMessage res;
             try
             {
-                res = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                res = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 // The caller cancelled. Wrapping that would hide it from every `catch (OperationCanceledException)`
                 // above, and it is not a failure of the call.
@@ -110,7 +110,7 @@ namespace Viaduct.Client
             if (!res.IsSuccessStatusCode)
             {
                 using (res)
-                    throw await CreateHttpExceptionAsync(res, method, requestUri?.ToString(), ct).ConfigureAwait(false);
+                    throw await CreateHttpExceptionAsync(res, method, requestUri?.ToString(), cancellationToken).ConfigureAwait(false);
             }
 
             return res;
@@ -123,12 +123,12 @@ namespace Viaduct.Client
             HttpResponseMessage response,
             string? method,
             string? uri,
-            CancellationToken ct)
+            CancellationToken cancellationToken)
         {
             string? body = null;
             try
             {
-                body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
                 if (body != null && body.Length > MaxErrorBodyLength)
                     body = body.Substring(0, MaxErrorBodyLength) + "… (truncated)";
@@ -157,8 +157,24 @@ namespace Viaduct.Client
         /// <summary>
         /// extracts the desired type from the response
         /// </summary>
-        protected async internal Task<T> ExtractResult<T>(HttpResponseMessage response, CancellationToken token = default)
-            => (await response.Content.ReadFromJsonAsync(GetJsonTypeInfo<T>(), token).ConfigureAwait(false))!;
+        protected async internal Task<T> ExtractResult<T>(HttpResponseMessage response, CancellationToken cancellationToken = default)
+            => (await response.Content.ReadFromJsonAsync(GetJsonTypeInfo<T>(), cancellationToken).ConfigureAwait(false))!;
+
+        /// <summary>
+        /// Reads the rest of an answer the call has no use for, so that disposing it does not abort it. In a browser the
+        /// response streams (WebAssembly), and one disposed unread aborts its fetch: the call succeeded, but the browser
+        /// reports it as failed. The answer is the server's success, so a body that cannot be read is let go.
+        /// </summary>
+        protected internal static async Task DrainResponse(HttpResponseMessage response, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await response.Content.CopyToAsync(Stream.Null, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is IOException or HttpRequestException && !cancellationToken.IsCancellationRequested)
+            {
+            }
+        }
 
 
     }

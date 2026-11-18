@@ -11,7 +11,7 @@ namespace Viaduct.Tests
     public class GeneratorMethodCallTests:GeneratorTestsBase
     {
         [Test]
-        [Arguments("ServerMappings.RegisterEndpoints<ITestApi>()")]
+        [Arguments("services.RegisterEndpoints<ITestApi>()")]
         [Arguments("ServerMappings.AddEndpoints<ITestApi>(null)")]
         [Arguments("services.AddSingletonAndMap<ITestApi,ITestApi>()")]
         [Arguments("var serv  = ServerMappings.AddSingletonAndMap<ITestApi, ITestApi>(services)")]

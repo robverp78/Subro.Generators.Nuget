@@ -11,7 +11,7 @@
 		<BuildOutputTargetFolder>contentFiles\cs\any</BuildOutputTargetFolder>
 
 		<PackageId>Subro.Generators.TransformResult</PackageId>
-		<Version>1.5.1</Version>
+		<Version>1.5.2</Version>
 		<Authors>Robert Verpalen</Authors>
 		<Description>Helps streamline incremental generator transformations and diagnostics</Description>
 		<PackageTags>roslyn;source-generator;incremental-generator;diagnostics;codegen</PackageTags>
@@ -20,6 +20,9 @@
 		<RepositoryUrl>https://github.com/robverp78/Subro.Generators.Nuget/tree/main/TransformResult</RepositoryUrl>
 		<RepositoryType>git</RepositoryType>
 		<PackRelease>true</PackRelease>
+
+		<!-- The test project lives in Tests, with files of its own: none of them is this package's. -->
+		<DefaultItemExcludes>$(DefaultItemExcludes);Tests\**</DefaultItemExcludes>
 	</PropertyGroup>
 
 	<!-- Source files packed as contentFiles -->

@@ -47,6 +47,9 @@ namespace Viaduct.Generation
             readonly Compilation? compilation = compilation;
             readonly string? BasePath  = GetBasePath(type).CheckRoutePart();
 
+            /// <summary>The interface's [ViaductRoutes] over its assembly's; null when neither sets anything.</summary>
+            readonly RouteDefaults? RouteDefaults = GetRouteDefaults(type);
+
             bool BasePathHasRouteParameters;
 
             /// <summary>
@@ -186,10 +189,11 @@ namespace Viaduct.Generation
                             FullyQualifiedName = fqn,
                             Identifier = BuildGenericIdentifier(named, fqn),
                             TypeArgSegment = BuildTypeArgSegment(named),
+                            RouteDefaults = RouteDefaults,
                         };
                     }
                     else
-                        Result = new(type.Name, ns, BasePath, methodArray);
+                        Result = new(type.Name, ns, BasePath, methodArray) { RouteDefaults = RouteDefaults };
                 }
             }
 
@@ -571,7 +575,40 @@ namespace Viaduct.Generation
                 }
             }
             return null;
-           
+
+        }
+
+        /// <summary>
+        /// What <see cref="ViaductRoutesAttribute"/> sets for <paramref name="type"/>: its assembly's, with the interface's own
+        /// over it. Null when neither sets anything, which leaves the generated code as it was without the attribute.
+        /// </summary>
+        static RouteDefaults? GetRouteDefaults(ITypeSymbol type)
+        {
+            var defaults = RouteDefaults.None;
+            if (type.ContainingAssembly is { } assembly)
+                defaults = defaults.With(ReadRouteDefaults(assembly.GetAttributes()));
+            defaults = defaults.With(ReadRouteDefaults(type.GetAttributes()));
+            return defaults.IsEmpty ? null : defaults;
+        }
+
+        static RouteDefaults ReadRouteDefaults(ImmutableArray<AttributeData> attributes)
+        {
+            foreach (var attribute in attributes)
+            {
+                if (attribute.AttributeClass?.Name != nameof(ViaductRoutesAttribute))
+                    continue;
+
+                // Only what the attribute names: a property left out is no statement about it.
+                bool? Named(string name)
+                    => attribute.NamedArguments.FirstOrDefault(a => a.Key == name).Value.Value as bool?;
+
+                return new RouteDefaults(
+                    Named(nameof(ViaductRoutesAttribute.UseRoutePathParameters)),
+                    Named(nameof(ViaductRoutesAttribute.ForceLowerCaseRouteParameters)),
+                    Named(nameof(ViaductRoutesAttribute.UseInterfaceNameForPath)),
+                    Named(nameof(ViaductRoutesAttribute.GenericTypeArgPathFirst)));
+            }
+            return RouteDefaults.None;
         }
 
     }

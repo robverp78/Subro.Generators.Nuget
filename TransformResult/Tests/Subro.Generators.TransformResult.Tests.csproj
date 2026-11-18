@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- The generators here are test doubles, run in this process only: never loaded by a compiler. -->
+    <NoWarn>$(NoWarn);RS1036;RS1041</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+    <PackageReference Include="TUnit" Version="1.29.0" />
+  </ItemGroup>
+
+  <!-- The package's source, compiled in as a generator project gets it from the package's contentFiles. -->
+  <ItemGroup>
+    <Compile Include="..\TransformResult.cs" Link="Package\TransformResult.cs" />
+    <Compile Include="..\Diagnostics.cs" Link="Package\Diagnostics.cs" />
+    <Compile Include="..\LocationInfo.cs" Link="Package\LocationInfo.cs" />
+  </ItemGroup>
+
+</Project>

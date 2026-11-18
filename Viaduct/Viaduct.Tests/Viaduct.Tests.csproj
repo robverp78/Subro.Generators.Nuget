@@ -24,7 +24,8 @@
     <ProjectReference Include="..\Viaduct.Client\Viaduct.Client.csproj" />
     <ProjectReference Include="..\Viaduct.Generator\Viaduct.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Viaduct\Viaduct.Server.csproj" />
-	 
+    <ProjectReference Include="..\Viaduct.Signals.Postgres\Viaduct.Signals.Postgres.csproj" />
+
   </ItemGroup>
 
 </Project>
