@@ -38,9 +38,30 @@ namespace Viaduct.Generation
             """;
             }
 
-            const string AndMapSuffix = "AndMap";
+            /// <summary>The same registration on a <c>ViaductEndpointChain</c>: the chain's options, then the call's own.</summary>
+            static string createChainMappingFunction(string method)
+            {
+                return $$"""
+            public static {{chainType}} {{method}}{{AndMapSuffix}}<TInterface, TImplementation>(this {{chainType}} chain, Action<{{serverOptions}}>? configure = null)
+                where TInterface : class
+                where TImplementation : class, TInterface
+            {
+                chain.Services.{{method}}<TInterface, TImplementation>();
+                Register(chain.Services, chain.With(configure));
+                return chain;
+            }
 
-            static void addMappingFunction(string method) => Methods.Add(method + AndMapSuffix, createMappingFunction(method));
+            """;
+            }
+
+            const string AndMapSuffix = "AndMap";
+            const string chainType = "ViaductEndpointChain";
+
+            static void addMappingFunction(string method)
+            {
+                Methods.Add(method + AndMapSuffix, createMappingFunction(method));
+                ChainMethods.Add(method + AndMapSuffix, createChainMappingFunction(method));
+            }
 
             static Server()
             {
@@ -51,12 +72,19 @@ namespace Viaduct.Generation
 
             public static readonly Dictionary<string, string> Methods = new()
             {
-                {"RegisterEndpoints", 
+                {"RegisterEndpoints",
                     $"           public static IServiceCollection RegisterEndpoints<TInterface>(this IServiceCollection services, Action<{serverOptions}>? configure = null) => Register(services, configure);"},
-                {"AddEndpoints", 
+                {"AddEndpoints",
                     $"          public static IEndpointRouteBuilder AddEndpoints<TInterface>(this IEndpointRouteBuilder app, Action<{serverOptions}>? configure = null){{ {mappingMethodName}(app, WithRouteDefaults(configure).GetOptionsInstance()); return app; }}"},
             };
-        }        
+
+            /// <summary>The interceptors of the calls on a <c>ViaductEndpointChain</c>, by method name.</summary>
+            public static readonly Dictionary<string, string> ChainMethods = new()
+            {
+                {"RegisterEndpoints",
+                    $"           public static {chainType} RegisterEndpoints<TInterface>(this {chainType} chain, Action<{serverOptions}>? configure = null) where TInterface : class {{ Register(chain.Services, chain.With(configure)); return chain; }}"},
+            };
+        }
 
         /// <summary>
         /// Emits the OpenAPI metadata for one endpoint: its tag, summary, description and name.
@@ -204,10 +232,10 @@ namespace {{GeneratedNameSpace}}
 """);
             sb.AppendWithRouteDefaults(info, serverOptions);
             //append interceptors
-            foreach(var methodGroup in callerMethods.GroupBy(m => m.Name))
+            foreach(var methodGroup in callerMethods.GroupBy(m => (m.Name, m.OnChain)))
             {
-                var method = methodGroup.Key;
-                var code = Server.Methods[method];
+                var (method, onChain) = methodGroup.Key;
+                var code = (onChain ? Server.ChainMethods : Server.Methods)[method];
 
                 foreach (var caller in methodGroup)
                     sb.AppendInterceptor(caller);

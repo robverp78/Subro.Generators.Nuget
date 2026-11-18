@@ -150,7 +150,11 @@ namespace Viaduct.Server
             /// <summary>
             /// A helper method to change the <see cref="ViaductServerOptions.Default"/> <see cref="ViaductServerOptions"/> for all mapping registrations
             /// made after this point. It does the same as altering the Default directly, but allows for chaining.
-            /// </summary>            
+            /// </summary>
+            /// <remarks>
+            /// The change is for the whole process and stays: other service collections registered after it get it too. For
+            /// options that only some registrations share, use <see cref="ViaductEndpoints"/>.
+            /// </remarks>
             public IServiceCollection ChangeViaductOptions(Action<ViaductServerOptions> configure)
             {
                 if (configure is not null)
@@ -184,6 +188,29 @@ namespace Viaduct.Server
         /// </summary>
         sealed class ViaductJsonTypesMarker { }
 
+        /// <summary>
+        /// Starts registrations that share <paramref name="configure"/>: each <c>Add…AndMap</c> and <c>RegisterEndpoints</c>
+        /// on the chain is given these options, then its own.
+        /// </summary>
+        /// <remarks>
+        /// The options are the chain's alone. <c>ChangeViaductOptions</c> changes <see cref="ViaductServerOptions.Default"/>
+        /// instead, for every registration after it in the process, other applications' (test hosts) included.
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// services.ViaductEndpoints(options => options.RequiresAuthorization = true)
+        ///     .AddScopedAndMap&lt;IGroupService, GroupService&gt;()
+        ///     .AddScopedAndMap&lt;IMemberService, MemberService&gt;();
+        /// </code>
+        /// </example>
+        /// <param name="services">The service collection to register on.</param>
+        /// <param name="configure">The options the chain's registrations share.</param>
+        public static ViaductEndpointChain ViaductEndpoints(this IServiceCollection services, Action<ViaductServerOptions>? configure = null)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            return new(services, configure);
+        }
+
         // A RegisterEndpoints<TInterface>() without a service collection used to stand here. It could not be intercepted (the
         // generated interceptor takes the services, CS9144), and registrations now live in the service collection, so
         // services.RegisterEndpoints<TInterface>() is the one.
@@ -213,6 +240,65 @@ namespace Viaduct.Server
     }
 
     /// <summary>
+    /// Endpoint registrations that share options, started by <see cref="ServerMappings.ViaductEndpoints"/>.
+    /// </summary>
+    /// <remarks>
+    /// A registration on the chain starts from <see cref="ViaductServerOptions.Default"/>, then takes what the interface's
+    /// <see cref="ViaductRoutesAttribute"/> says, then the chain's options, then its own <c>configure</c>. As on the service
+    /// collection, each call is replaced at compile time by generated code, and the endpoints are mapped by
+    /// <c>AddRegisteredEndpoints</c>.
+    /// </remarks>
+    public sealed class ViaductEndpointChain
+    {
+        readonly Action<ViaductServerOptions>? shared;
+
+        internal ViaductEndpointChain(IServiceCollection services, Action<ViaductServerOptions>? shared)
+        {
+            Services = services;
+            this.shared = shared;
+        }
+
+        /// <summary>The service collection the chain registers on, to go on with other registrations.</summary>
+        public IServiceCollection Services { get; }
+
+        /// <summary>Registers <typeparamref name="TImplementation"/> as a scoped service and its endpoints for mapping.</summary>
+        /// <param name="configure">This registration's own options, after the chain's.</param>
+        public ViaductEndpointChain AddScopedAndMap<TInterface, TImplementation>(Action<ViaductServerOptions>? configure = null)
+            where TInterface : class
+            where TImplementation : class, TInterface
+            => throw new ViaductMethodNotInterceptedException();
+
+        /// <summary>Registers <typeparamref name="TImplementation"/> as a transient service and its endpoints for mapping.</summary>
+        /// <param name="configure">This registration's own options, after the chain's.</param>
+        public ViaductEndpointChain AddTransientAndMap<TInterface, TImplementation>(Action<ViaductServerOptions>? configure = null)
+            where TInterface : class
+            where TImplementation : class, TInterface
+            => throw new ViaductMethodNotInterceptedException();
+
+        /// <summary>Registers <typeparamref name="TImplementation"/> as a singleton and its endpoints for mapping.</summary>
+        /// <param name="configure">This registration's own options, after the chain's.</param>
+        public ViaductEndpointChain AddSingletonAndMap<TInterface, TImplementation>(Action<ViaductServerOptions>? configure = null)
+            where TInterface : class
+            where TImplementation : class, TInterface
+            => throw new ViaductMethodNotInterceptedException();
+
+        /// <summary>Registers the endpoints of <typeparamref name="TInterface"/> for mapping, its implementation registered elsewhere.</summary>
+        /// <param name="configure">This registration's own options, after the chain's.</param>
+        public ViaductEndpointChain RegisterEndpoints<TInterface>(Action<ViaductServerOptions>? configure = null)
+            where TInterface : class
+            => throw new ViaductMethodNotInterceptedException();
+
+        /// <summary>
+        /// The chain's options, then <paramref name="then"/>: what a registration on the chain is configured with. Used by the
+        /// generated code.
+        /// </summary>
+        public Action<ViaductServerOptions>? With(Action<ViaductServerOptions>? then)
+            => shared is null ? then
+             : then is null ? shared
+             : options => { shared(options); then(options); };
+    }
+
+    /// <summary>
     /// Helper functions for the generated code
     /// </summary>
     public static partial class ViaductServerHelperFunctions
@@ -236,6 +322,7 @@ namespace Viaduct.Server
         /// <c>{userId}</c> becomes <c>{userId:guid}</c>, <c>{age?}</c> <c>{age:int?}</c>. A parameter with a constraint of
         /// its own, and a catch-all, are left as they are. See <see cref="ViaductServerOptions.UseRouteTypeConstraints"/>.
         /// </summary>
+        /// <param name="template">The route template, as it would be mapped without constraints.</param>
         /// <param name="constraints">
         /// The constraint per parameter name, as the dictionary's comparer matches names; the generated mappings ignore case,
         /// as their route parameter names do.

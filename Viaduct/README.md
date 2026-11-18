@@ -254,7 +254,30 @@ public interface IUserService { ... }
 
 It takes `UseRoutePathParameters`, `ForceLowerCaseRouteParameters`, `UseInterfaceNameForPath` and
 `GenericTypeArgPathFirst`; only the ones it names apply. The order is: the options' defaults, then `[ViaductRoutes]`,
-then a registration's `configure`, which can still change any of it, on its own side only.
+then the chain's options (below), then a registration's `configure`, which can still change any of it, on its own side only.
+
+### Registrations that share options (chains)
+
+Options several registrations share, such as the API's address or that every endpoint needs a signed-in caller, are
+given once to a chain, and each registration on it gets them:
+
+```csharp
+// Server
+builder.Services.ViaductEndpoints(options => options.RequiresAuthorization = true)
+    .AddScopedAndMap<IUserService, UserService>()
+    .AddScopedAndMap<IOrderService, OrderService>(options => options.BasePath = "/shop")   // its own, after the chain's
+    .RegisterEndpoints<IReportService>();
+
+// Client: the options, and what each client's IHttpClientBuilder is given
+builder.Services.ViaductClients(options => options.BaseUrl = apiUrl, client => client.AddHttpMessageHandler<AppHeaderHandler>())
+    .Add<IUserService>()
+    .Add<IOrderService>(client: client => client.AddStandardResilienceHandler());               // after the chain's
+```
+
+The chain's options are its own: registrations outside it, and other applications in the process (test hosts), do not
+get them. Changing `ViaductServerOptions.Default` or `ViaductClientOptions.Default` (or the server's
+`ChangeViaductOptions`) instead reaches every registration after it in the whole process. `.Services` goes back to the
+service collection.
 
 ### Server options
 

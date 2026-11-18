@@ -104,6 +104,7 @@ namespace Viaduct.Generation
 
                 const string clientClass = nameof(ViaductClientBase);
                 const string clientOptions = nameof(ViaductClientOptions);
+                const string clientChain = "ViaductClientChain";
                 const string RoutesClass = "ViaductRoutes";
                 const string BasePathVariable = "BasePath";
 
@@ -158,7 +159,22 @@ namespace {GeneratedNameSpace}
                     sb.Append(@"
     file static class ").Append(info.Identifier).Append("_interceptors").Append(@"
     {");
-                    foreach(var caller in callers)
+                    var onChain = callers.Where(static c => c.OnChain).ToArray();
+                    if (onChain.Length > 0)
+                    {
+                        sb.AppendLine();
+                        foreach (var caller in onChain)
+                            sb.AppendInterceptor(caller);
+
+                        // Add<TInterface> on a ViaductClientChain: the chain's options and builder setup, then the call's own.
+                        sb.Append(@"
+        public static ").Append(clientChain).Append(" AddToChain(this ").Append(clientChain).Append(" chain, ").AppendConfigureArg()
+                            .Append(@", Action<IHttpClientBuilder>? client = null)
+            => chain.ConfigureClient(chain.Services.AddMappedHttpClient(chain.With(configure)), client);
+");
+                    }
+
+                    foreach(var caller in callers.Where(static c => !c.OnChain))
                     {
                         sb.AppendInterceptor(caller);
                     }

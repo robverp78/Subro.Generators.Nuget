@@ -125,7 +125,12 @@ namespace Viaduct.Generation
     /// </summary>
     public record InterfaceCalls(bool IsServerCall, InterfaceMetaData InterfaceMetaData, EquatableArray<MethodCallerInfo> Callers);
 
-    public record MethodCallerInfo(string Name, LocationInfo Location,string Interceptor, bool IsServerCall, InterfaceMetaData InterfaceMetaData) 
+    /// <param name="OnChain">
+    /// Called on a chain (<c>ViaductEndpointChain</c>, <c>ViaductClientChain</c>) rather than on the service collection, so
+    /// the interceptor takes the chain.
+    /// </param>
+    public record MethodCallerInfo(string Name, LocationInfo Location,string Interceptor, bool IsServerCall, InterfaceMetaData InterfaceMetaData,
+        bool OnChain = false)
     {
         public override string ToString() => $"{Name} <{InterfaceMetaData}>";        
     }

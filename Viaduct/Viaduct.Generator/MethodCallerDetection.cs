@@ -27,11 +27,16 @@ namespace Viaduct.Generation
         private static readonly TransformResult<CreationInfo> NotAViaductCall =
             new(default, ImmutableArray<DiagnosticInfo>.Empty);
 
-        // Method names that trigger client proxy generation
+        // Method names that trigger client proxy generation: on the service collection, and Add on a ViaductClientChain
         private static readonly HashSet<string> ClientRegistrationNames =
         [
-            "CreateAndAddHttpClient"
+            "CreateAndAddHttpClient",
+            "Add",
         ];
+
+        // The chains whose registrations share options (services.ViaductEndpoints(...), services.ViaductClients(...)).
+        const string ServerChainType = "Viaduct.Server.ViaductEndpointChain";
+        const string ClientChainType = "Viaduct.Client.ViaductClientChain";
 
         // Combined for detection
         private static readonly HashSet<string> AllRegistrationNames =
@@ -99,9 +104,10 @@ namespace Viaduct.Generation
             // Determine server vs client
             var isServer = Server.Methods.ContainsKey(methodSymbol.Name);
 
-            var containingType = isServer ? "Server.ServerMappings" : "Client.ClientMappings";
-            // Verify it's in your class
-            if (!methodSymbol.ContainingType.ToDisplayString().StartsWith($"Viaduct.{containingType}"))
+            // Verify it's one of ours: on the service collection (ServerMappings, ClientMappings), or on a chain.
+            var containingType = methodSymbol.ContainingType.ToDisplayString();
+            var onChain = containingType == (isServer ? ServerChainType : ClientChainType);
+            if (!onChain && !containingType.StartsWith(isServer ? "Viaduct.Server.ServerMappings" : "Viaduct.Client.ClientMappings"))
                 return NotAViaductCall;
 
             // Extract interface type from generic arguments.
@@ -128,7 +134,8 @@ namespace Viaduct.Generation
                 LocationInfo.FromCaller(invocation),
                 interceptableLocation.GetInterceptsLocationAttributeSyntax(),
                 isServer,
-                iData),
+                iData,
+                onChain),
                 null);
 
             return res;

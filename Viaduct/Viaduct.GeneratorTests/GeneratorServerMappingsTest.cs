@@ -392,6 +392,77 @@ namespace Viaduct.Tests
         }
 
         /// <summary>
+        /// Registrations on a chain are intercepted on both sides, beside the same interface's registrations on the service
+        /// collection, and are given the chain's options before their own.
+        /// </summary>
+        [Test]
+        public async Task ChainedRegistrations_AreInterceptedOnBothSides_AndCompile()
+        {
+            const string source = Usings + """
+                using System.Net.Http;
+                using System.Threading;
+                using Viaduct.Client;
+
+                namespace TestApp
+                {
+                    public interface IChainedApi
+                    {
+                        Task<int> GetAsync(int id, CancellationToken cancellationToken = default);
+                    }
+
+                    public interface IOtherApi
+                    {
+                        Task<int> CountAsync(CancellationToken cancellationToken = default);
+                    }
+
+                    class ChainedApi : IChainedApi
+                    {
+                        public Task<int> GetAsync(int id, CancellationToken cancellationToken = default) => Task.FromResult(id);
+                    }
+
+                    class Startup
+                    {
+                        void Configure(IServiceCollection services)
+                        {
+                            services.ViaductEndpoints(o => o.RequiresAuthorization = true)
+                                .AddScopedAndMap<IChainedApi, ChainedApi>()
+                                .AddSingletonAndMap<IChainedApi, ChainedApi>(o => o.BasePath = "/own")
+                                .RegisterEndpoints<IOtherApi>();
+                            services.AddScopedAndMap<IChainedApi, ChainedApi>();
+
+                            services.ViaductClients(o => o.BaseUrl = "https://api.test/", client => client.SetHandlerLifetime(TimeSpan.FromMinutes(1)))
+                                .Add<IChainedApi>()
+                                .Add<IOtherApi>(o => o.BaseUrl = "https://other.test/", client => { })
+                                .Services.CreateAndAddHttpClient<IChainedApi>();
+                        }
+                    }
+                }
+                """;
+
+            var compiler = createCompiler();
+            compiler.CheckErrors = false;
+            compiler.IncrementalGenerators.Add(new ViaductGenerator());
+            var compilation = compiler.Create(source);
+
+            var errors = AllDiagnostics(compilation)
+                .Where(d => d.Severity == DiagnosticSeverity.Error && !d.ToString().Contains("Viaduct_AotTypes"))
+                .ToArray();
+            await Assert.That(errors).IsEmpty();
+
+            var generated = compilation.GeneratorResults.SelectMany(static g => g.Results).SelectMany(static r => r.GeneratedSources).ToArray();
+            var server = generated.Single(static s => s.HintName.Contains("IChainedApi_ServerMapping")).SourceText.ToString();
+            var client = generated.Single(static s => s.HintName.Contains("IChainedApi_ClientMapping")).SourceText.ToString();
+
+            await Assert.That(server).Contains("AddScopedAndMap<TInterface, TImplementation>(this ViaductEndpointChain chain");
+            await Assert.That(server).Contains("AddScopedAndMap<TInterface, TImplementation>(this IServiceCollection services");
+            await Assert.That(server).Contains("Register(chain.Services, chain.With(configure));");
+            await Assert.That(client).Contains("AddToChain(this ViaductClientChain chain");
+            await Assert.That(client).Contains("chain.ConfigureClient(chain.Services.AddMappedHttpClient(chain.With(configure)), client)");
+            await Assert.That(generated.Any(static s => s.HintName.Contains("IOtherApi_ServerMapping"))).IsTrue();
+            await Assert.That(generated.Any(static s => s.HintName.Contains("IOtherApi_ClientMapping"))).IsTrue();
+        }
+
+        /// <summary>
         /// The server maps a route parameter with its type's constraint, only for a type whose constraint reads a value as
         /// its binding does; a base path's parameter gets one when every method agrees on it.
         /// </summary>

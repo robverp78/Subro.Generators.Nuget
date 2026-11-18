@@ -17,6 +17,10 @@ namespace Viaduct.Tests
         [Arguments("var serv  = ServerMappings.AddSingletonAndMap<ITestApi, ITestApi>(services)")]
         [Arguments("dynamic obj = null;obj.RegisterEndpoints<ITestApi>()", false)]
         [Arguments("services.CreateAndAddHttpClient<ITestApi>()")]
+        [Arguments("services.ViaductEndpoints().AddScopedAndMap<ITestApi,ITestApi>()")]
+        [Arguments("services.ViaductEndpoints().RegisterEndpoints<ITestApi>()")]
+        [Arguments("services.ViaductClients().Add<ITestApi>()")]
+        [Arguments("void Add<T>() { } Add<ITestApi>()", false)]
         public Task MethodIsFound(string Method, bool? IsValidMethod = null) => checkMethodFoundPredicate(Method, true, IsValidMethod);
 
         [Test]
