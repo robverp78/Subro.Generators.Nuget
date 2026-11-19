@@ -23,7 +23,7 @@ namespace Viaduct.Signals
         readonly IOptionsMonitor<SignalOptions> options;
         readonly ILogger logger;
         readonly SemaphoreSlim reading = new(1, 1);
-        readonly object gate = new();
+        readonly Lock gate = new();
 
         SignalListener[] listeners = [];
         Task? starting;
@@ -193,7 +193,7 @@ namespace Viaduct.Signals
         readonly ISignalStore store;
         readonly Channel<SignalEnvelope> channel;
         readonly int capacity;
-        readonly object gate = new();
+        readonly Lock gate = new();
         readonly long? catchUpFrom;
         readonly IReadOnlySet<string>? holdOn;
 

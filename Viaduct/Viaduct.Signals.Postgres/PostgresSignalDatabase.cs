@@ -57,7 +57,7 @@ namespace Viaduct.Signals
         static readonly Regex Identifier = new("^[a-z_][a-z0-9_]{0,50}$", RegexOptions.CultureInvariant);
 
         readonly bool ownsDataSource;
-        readonly object gate = new();
+        readonly Lock gate = new();
         Task? created;
 
         /// <summary>The database on <paramref name="dataSource"/>; disposing this disposes it only when <paramref name="owns"/>.</summary>

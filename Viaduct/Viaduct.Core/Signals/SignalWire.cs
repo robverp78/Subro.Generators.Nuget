@@ -187,8 +187,9 @@ namespace Viaduct.Signals
             if (id is long value)
                 text.Append("id: ").Append(value).Append('\n');
             text.Append("event: ").Append(eventType).Append('\n');
-            foreach (var line in data.Split('\n'))
-                text.Append("data: ").Append(line.TrimEnd('\r')).Append('\n');
+            var span = data.AsSpan();
+            foreach (var line in span.Split('\n'))
+                text.Append("data: ").Append(span[line].TrimEnd('\r')).Append('\n');
             return text.Append('\n').ToString();
         }
 
@@ -230,19 +231,20 @@ namespace Viaduct.Signals
                 if (line[0] == ':')
                     continue;
 
+                // Read as spans: only an id or an event type becomes a string; a data line is copied straight into the buffer.
                 var colon = line.IndexOf(':');
-                var field = colon < 0 ? line : line.Substring(0, colon);
-                var value = colon < 0 ? "" : line.Substring(colon + 1);
+                var field = colon < 0 ? line.AsSpan() : line.AsSpan(0, colon);
+                var value = colon < 0 ? [] : line.AsSpan(colon + 1);
                 if (value.StartsWith(' '))
-                    value = value.Substring(1);
+                    value = value[1..];
 
                 switch (field)
                 {
                     case "id":
-                        id = value;
+                        id = value.ToString();
                         break;
                     case "event":
-                        type = value;
+                        type = value.ToString();
                         break;
                     case "data":
                         if (hasData)

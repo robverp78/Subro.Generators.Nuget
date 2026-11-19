@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>14</LangVersion>
 
     <PackageId>Subro.Json</PackageId>
-    <Description>AOT-friendly JSON serialization library with integrated source generator for .NET 8+.</Description>
+    <Description>AOT-friendly JSON serialization library with integrated source generator for .NET 10+.</Description>
     <PackageTags>json;serialization;source-generator;aot;system-text-json</PackageTags>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <!-- Checked for trimming and AOT as it builds: it is what a phone's client (MAUI) reads and writes JSON through. -->

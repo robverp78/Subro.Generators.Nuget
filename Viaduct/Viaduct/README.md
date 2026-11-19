@@ -107,7 +107,7 @@ Override with `[HttpGet]`, `[HttpPost]`, or `[HttpMethodType("PUT")]` on the met
 
 ## Requirements
 
-- .NET 8, 9, or 10
+- .NET 10 or later
 - C# 14+ (uses `[InterceptsLocation]` for compile-time interception)
 - ASP.NET Core
 

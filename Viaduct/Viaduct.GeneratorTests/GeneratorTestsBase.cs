@@ -49,7 +49,8 @@ using Microsoft.AspNetCore.Routing;
                     typeof(RouteGroupBuilder), typeof(AuthorizationEndpointConventionBuilderExtensions), typeof(IAuthorizeData)];
 
 
-            var compiler = new TestCompiler();
+            // C# 14: the default of net10, the oldest framework Viaduct targets.
+            var compiler = new TestCompiler { LanguageVersion = LanguageVersion.CSharp14 };
             compiler.InterceptorNamespaces.Add("Viaduct.Generated");
             return compiler;
         }

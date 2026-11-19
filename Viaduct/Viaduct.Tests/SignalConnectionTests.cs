@@ -207,6 +207,9 @@ namespace Viaduct.Tests
             await Assert.That(setup.Client.ConnectionName).IsEqualTo(SignalConnectionNames.ServerSentEvents);
             await Assert.That(setup.Client.State).IsNotEqualTo(SignalClientState.Connected);
 
+            // The fourth attempt was let go by the last advance: wait for it to fail and set its timer, or advancing the clock
+            // below could come before that timer exists and move nothing.
+            await WaitFor(() => setup.Behaviour.Requests >= 4 && setup.Client.State == SignalClientState.Reconnecting && setup.ClientTime.PendingTimers > 0, "attempt 4 failed and its wait");
             setup.Behaviour.Mode = "normal";
             setup.ClientTime.Advance(TimeSpan.FromSeconds(10));
             await Connected(setup, SignalConnectionNames.ServerSentEvents);

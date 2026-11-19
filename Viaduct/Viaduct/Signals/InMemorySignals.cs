@@ -16,7 +16,7 @@ namespace Viaduct.Signals
     /// </remarks>
     public sealed class InMemorySignalStore : ISignalStore
     {
-        readonly object gate = new();
+        readonly Lock gate = new();
         readonly List<SignalEnvelope> signals = [];
         readonly IOptionsMonitor<SignalOptions> options;
 
@@ -127,7 +127,7 @@ namespace Viaduct.Signals
     /// <summary>The bus of a single server: what is announced reaches this process's subscribers only.</summary>
     public sealed class InProcessSignalBus : ISignalBus
     {
-        readonly object gate = new();
+        readonly Lock gate = new();
         ISignalBusSubscriber[] subscribers = [];
 
         /// <inheritdoc/>

@@ -72,9 +72,8 @@ namespace Viaduct.Signals
         /// The topic with each hole filled, in the order of <see cref="ParameterNames"/>. The values are written as
         /// <see cref="SignalTopicValues"/> writes them.
         /// </summary>
-        public string Fill(params string[] values)
+        public string Fill(params ReadOnlySpan<string> values)
         {
-            ArgumentNullException.ThrowIfNull(values);
             if (values.Length != ParameterNames.Count)
                 throw new ArgumentException($"'{Template}' has {ParameterNames.Count} holes, given {values.Length} values.", nameof(values));
             if (values.Length == 0)

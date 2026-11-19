@@ -42,7 +42,7 @@ For another `JsonSerializerOptions`, such as ASP.NET Core's: `options.AddRegiste
 
 `Json.Options` (camelCase) is made read-only on the first lookup: only then does it keep the contracts it builds.
 
-## Schemas (.NET 9 and later)
+## Schemas
 
 `Json.GetJsonSchema<T>()` is the JSON schema of `T` from the same contract, for an LLM's structured output or a tool's
 parameters, so the schema describes exactly the JSON that is parsed back. Built once per type.

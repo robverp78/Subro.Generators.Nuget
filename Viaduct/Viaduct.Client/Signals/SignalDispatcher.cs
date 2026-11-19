@@ -47,7 +47,7 @@ namespace Viaduct.Signals
         readonly TimeProvider time;
         readonly ILogger logger;
         readonly SemaphoreSlim delivering = new(1, 1);
-        readonly object gate = new();
+        readonly Lock gate = new();
         readonly Dictionary<(string Key, string Topic), Held> held = [];
         readonly List<Subscription> subscriptions = [];
         long cursor;

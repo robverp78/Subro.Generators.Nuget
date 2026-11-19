@@ -497,6 +497,6 @@ Viaduct.Tests/          Integration tests using ASP.NET Core TestHost
 
 ## Requirements
 
-- .NET 8, 9, or 10
+- .NET 10 or later
 - C# 14+ (for the `[InterceptsLocation]` feature used by the generator)
 - ASP.NET Core (server side only)

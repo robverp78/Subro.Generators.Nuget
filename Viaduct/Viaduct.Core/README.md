@@ -81,6 +81,6 @@ The server and client projects reference this interface and add `Viaduct.Server`
 
 ## Requirements
 
-- .NET 8, 9, or 10
+- .NET 10 or later
 
 [Full documentation and examples →](https://github.com/robverp78/Subro.Generators.Nuget/blob/main/Viaduct/README.md)

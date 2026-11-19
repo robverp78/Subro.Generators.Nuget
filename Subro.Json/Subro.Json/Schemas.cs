@@ -1,4 +1,3 @@
-#if NET9_0_OR_GREATER
 using System.Text.Json;
 using System.Text.Json.Schema;
 using System.Text.Json.Serialization.Metadata;
@@ -41,4 +40,3 @@ namespace Subro
         }
     }
 }
-#endif

@@ -79,7 +79,7 @@ namespace Viaduct.Signals
         readonly ISignalClientEnvironment environment;
         readonly TimeProvider time;
         readonly ILogger logger;
-        readonly object gate = new();
+        readonly Lock gate = new();
 
         CancellationTokenSource? stopping;
         Task? loop;

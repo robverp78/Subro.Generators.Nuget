@@ -73,7 +73,7 @@ The source generator ships inside `Viaduct.Core`, which both packages depend on,
 
 ## Requirements
 
-- .NET 8, 9, or 10
+- .NET 10 or later
 - C# 14+ (uses `[InterceptsLocation]` for compile-time interception)
 - ASP.NET Core
 

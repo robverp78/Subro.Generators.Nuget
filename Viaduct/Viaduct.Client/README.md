@@ -116,7 +116,7 @@ call throws `OperationCanceledException`, unwrapped.
 
 ## Requirements
 
-- .NET 8, 9, or 10
+- .NET 10 or later
 - C# 14+ (uses `[InterceptsLocation]` for compile-time interception)
 
 [Full documentation and examples →](https://github.com/robverp78/Subro.Generators.Nuget/blob/main/Viaduct/README.md)

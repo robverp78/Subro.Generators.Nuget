@@ -21,7 +21,7 @@ namespace Viaduct.Signals
 
         readonly PostgresSignalDatabase database;
         readonly ILogger logger;
-        readonly object gate = new();
+        readonly Lock gate = new();
         ISignalBusSubscriber[] subscribers = [];
         CancellationTokenSource? stopping;
         Task? listening;
